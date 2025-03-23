@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+*.log
+.git
+.gitignore
+.idea
+.vscode
+utils/inlaid-sentinel-444404-f8-be06a73c1031.json
+utils/skilled-compass.json
