@@ -25,4 +25,5 @@ ENV/
 .idea/
 .vscode/
 *.log
-"utils/inlaid-sentinel-444404-f8-be06a73c1031.json"  
+utils/inlaid-sentinel-444404-f8-be06a73c1031.json
+utils/skilled-compass.json

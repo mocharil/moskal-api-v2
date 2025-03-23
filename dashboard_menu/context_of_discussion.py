@@ -1,7 +1,13 @@
 from utils.functions import About_BQ
 import os
-BQ = About_BQ(project_id="inlaid-sentinel-444404-f8", credentials_loc='./utils/inlaid-sentinel-444404-f8-be06a73c1031.json')
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
+BQ_PROJECT_ID = os.getenv("BQ_PROJECT_ID")
+BQ_CREDS_LOCATION = os.getenv("BQ_CREDS_LOCATION")
+
+BQ = About_BQ(project_id = BQ_PROJECT_ID, credentials_loc = BQ_CREDS_LOCATION)
 def context_of_discussion(
     keyword=None,
     sentiment=None,  # Can be a string or list of strings

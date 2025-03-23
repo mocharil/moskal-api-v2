@@ -10,11 +10,17 @@ from vertexai.generative_models import (
     HarmBlockThreshold,
     Image
 )
+from dotenv import load_dotenv
+import os
 
 print('V2')
 # Vertex AI configuration
-project_id = 'paper-ds-production'
-credentials_file_path = '../skilled-compass.json'
+
+load_dotenv()
+BQ_CREDS_LOCATION = os.getenv("BQ_CREDS_LOCATION")
+
+project_id = os.getenv("GEMINI_PROJECT_ID")
+credentials_file_path = os.getenv("GEMINI_CREDS_LOCATION")
 credentials = service_account.Credentials.from_service_account_file(credentials_file_path)
 vertexai.init(project=project_id, credentials=credentials)
 

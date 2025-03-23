@@ -1,7 +1,13 @@
 from utils.functions import About_BQ
 import os
-BQ = About_BQ(project_id="inlaid-sentinel-444404-f8", credentials_loc='./utils/inlaid-sentinel-444404-f8-be06a73c1031.json')
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
+BQ_PROJECT_ID = os.getenv("BQ_PROJECT_ID")
+BQ_CREDS_LOCATION = os.getenv("BQ_CREDS_LOCATION")
+
+BQ = About_BQ(project_id = BQ_PROJECT_ID, credentials_loc = BQ_CREDS_LOCATION)
 def fill_missing_dates(df, date_filter, custom_start_date=None, custom_end_date=None):
     """
     Fill in missing dates in the dataframe with zeros.

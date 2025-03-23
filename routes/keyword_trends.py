@@ -4,8 +4,14 @@ from dashboard_menu.keyword_trends import keyword_trends_query, fill_missing_dat
 from utils.functions import About_BQ
 
 router = APIRouter()
-BQ = About_BQ(project_id="inlaid-sentinel-444404-f8", credentials_loc='./utils/inlaid-sentinel-444404-f8-be06a73c1031.json')
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
+BQ_PROJECT_ID = os.getenv("BQ_PROJECT_ID")
+BQ_CREDS_LOCATION = os.getenv("BQ_CREDS_LOCATION")
+
+BQ = About_BQ(project_id = BQ_PROJECT_ID, credentials_loc = BQ_CREDS_LOCATION)
 @router.post("/api/keyword-trends", tags = ["Dashboard Menu"])
 async def get_keyword_trends(request: DashboardRequest):
 

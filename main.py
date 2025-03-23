@@ -53,7 +53,6 @@ app.include_router(trending_links.router)
 app.include_router(popular_emojis.router)
 
 
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=1000)
