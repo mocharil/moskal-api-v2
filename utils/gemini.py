@@ -17,7 +17,6 @@ print('V2')
 # Vertex AI configuration
 
 load_dotenv()
-BQ_CREDS_LOCATION = os.getenv("BQ_CREDS_LOCATION")
 
 project_id = os.getenv("GEMINI_PROJECT_ID")
 credentials_file_path = os.getenv("GEMINI_CREDS_LOCATION")
