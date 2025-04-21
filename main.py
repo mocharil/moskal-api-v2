@@ -19,7 +19,18 @@ from utils.share_of_voice import get_share_of_voice
 from utils.summary_stats import get_stats_summary
 from utils.trending_hashtags import get_trending_hashtags
 from utils.trending_links import get_trending_links
+import sys
+import traceback
 
+try:
+    # Log versioning info
+    print(f"Python version: {sys.version}")
+    print("Starting import process...")
+except Exception as e:
+    print(f"Error during startup: {e}")
+    traceback.print_exc()
+    sys.exit(1)
+    
 app = FastAPI(
     title="Social Media Analytics API",
     description="API for analyzing social media data from Elasticsearch",
