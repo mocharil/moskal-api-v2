@@ -109,36 +109,86 @@ class KolOverviewRequest(CommonParams):
     project_name: str
 
 
+sample_input = """
+Sample Input:
+Notes: - Keyword wajib ada, sisanya bisa dikosongkan
+       - custom_start_date dan custom_end_date kosongkan saja jika date_filter nya bukan custom
+
+{"keywords": [
+    "prabowo","gibran"
+  ],
+  "search_exact_phrases": false,
+  "case_sensitive": false,
+  "sentiment": [
+    "positive","negative","neutral"
+  ],
+  "date_filter": "last 30 days",
+  "custom_start_date": "2025-04-01",
+  "custom_end_date": "2025-04-20",
+  "channels": [
+    "tiktok","instagram","news","reddit","facebook","twitter","linkedin","youtube"
+  ],
+  "importance": "important mentions",
+  "influence_score_min": 0,
+  "influence_score_max": 100,
+  "region": [
+    "bandung","jakarta"
+  ],
+  "language": [
+    "indonesia","english"
+  ],
+  "domain": [
+    "kumparan.com","detik.com"
+  ]"""
+
+
+
 ########### DASHBOARD MENU ##########
 @app.post("/api/v2/keyword-trends", tags = ["Dashboard Menu"])
 async def keyword_trends_analysis(params: CommonParams):
-    """Digunakan di menu:
+    f"""Digunakan di menu:
     - Dashboard
     - Topics pada bagian Occurences
     - Summary
     - Analysis
     - Comparison
+    
+     {sample_input} 
+     }
+    
+    
     """
     return get_keyword_trends(**params.dict())
 
 @app.post("/api/v2/context-of-discussion", tags = ["Dashboard Menu"])
 async def context_analysis(params: CommonParams):
-    """Digunakan di menu:
+    f"""Digunakan di menu:
     - Dashboard
     - Topics
     - Analysis
     - Comparison
+
+     {sample_input} 
+     }
     """
     return get_context_of_discussion(**params.dict())
 
 @app.post("/api/v2/list-of-mentions", tags = ["Dashboard Menu"])
 async def get_mentions_list(params: MentionsRequest):
-    """Digunakan di menu:
+    f"""Digunakan di menu:
     - Dashboard
     - Topics
     - Summary
     - Analysis
     - Comparison -> Most Viral funakan sort_type = "popular"
+    
+     {sample_input}, 
+  "sort_type": "recent", #'popular', 'recent', atau 'relevant'
+  "sort_order": "desc", #desc atau asc
+  "page": 1,
+  "page_size": 10,
+     }
+    
     """
     return get_mentions(**params.dict())
 
@@ -146,16 +196,19 @@ async def get_mentions_list(params: MentionsRequest):
 ########### ANALYSIS MENU ##########
 @app.post("/api/v2/analysis-overview", tags = ["Analysis Menu"])
 async def analysis_overview(params: CommonParams):
-    """Digunakan di menu:
+    f"""Digunakan di menu:
     - Analysis -> Overview
     - Summary -> Summary
     - Comparison -> Overview
+
+    {sample_input}
+    }
     """
     return get_social_media_matrix(**params.dict())
 
 @app.post("/api/v2/mention-sentiment-breakdown", tags=["Analysis Menu"])
 async def analysis_sentiment(params: CommonParams):
-    """Digunakan di menu:
+    f"""Digunakan di menu:
     - Analysis : 
         1. Mention by categories
         2. Sentiment by categories
@@ -166,93 +219,165 @@ async def analysis_sentiment(params: CommonParams):
     - Comparison:
         1. Sentiment breakdown
         2. Channels share -> gunakan Mention by categories
-    - """
+
+    {sample_input}
+    }
+    """
     return get_category_analytics(**params.dict())
 
 
 @app.post("/api/v2/presence-score", tags=["Analysis Menu"])
 async def presence_score_analysis(params: PresenceRequest):
-    """Digunakan pada menu:
+    f"""Digunakan pada menu:
     - Analysis : 
         Presence Score
     - Summary:
-        Presence Score -> gunakan score nya saja"""
+        Presence Score -> gunakan score nya saja
+        
+        {sample_input},
+      "interval": "week", #day, week, month
+      "compare_with_topics": true,
+      "num_topics_to_compare": 10
+        }
+        
+        """
     return get_presence_score(**params.dict())
 
 
 @app.post("/api/v2/most-share-of-voice", tags=["Analysis Menu"])
 async def share_of_voice_analysis(params: ShareOfVoiceRequest):
-    """Digunakan pada Menu:
-    - Analysis -> Most Share of Voice"""
+    f"""Digunakan pada Menu:
+    - Analysis -> Most Share of Voice
+    
+    {sample_input},
+  "limit": 10,
+  "page": 1,
+  "page_size": 10,
+  "include_total_count": true
+    }
+    """
     return get_share_of_voice(**params.dict())
 
 
 @app.post("/api/v2/most-followers", tags=["Analysis Menu"])
 async def most_followers_analysis(params: FollowersRequest):
-    """Digunakan pada Menu:
-    - Analysis -> Most Followers"""
+    f"""Digunakan pada Menu:
+    - Analysis -> Most Followers
+
+    {sample_input},
+  "limit": 10,
+  "page": 1,
+  "page_size": 10,
+  "include_total_count": true
+    }
+    """
     return get_most_followers(**params.dict())
 
 
 @app.post("/api/v2/trending-hashtags", tags=["Analysis Menu"])
 async def trending_hashtags_analysis(params: HashtagsRequest):
-    """Digunakan pada Menu:
-    - Analysis -> Trending hashtags"""
+    f"""Digunakan pada Menu:
+    - Analysis -> Trending hashtags
+    
+    {sample_input},
+  "limit": 100,
+  "page": 1,
+  "page_size": 10,
+  "sort_by": "mentions" 
+    }    
+
+    
+    """
     return get_trending_hashtags(**params.dict())
 
 @app.post("/api/v2/trending-links", tags = ["Analysis Menu"])
 async def trending_links_analysis(params: LinksRequest):
-    """Digunakan pada Menu:
-    - Analysis -> Trending links"""
+    f"""Digunakan pada Menu:
+    - Analysis -> Trending links
+
+        {sample_input},
+  "limit": 1000,
+  "page": 1,
+  "page_size": 10
+    }    
+    
+    """
     return get_trending_links(**params.dict())
 
 @app.post("/api/v2/popular-emojis", tags=["Analysis Menu"])
 async def popular_emojis_analysis(params: EmojisRequest):
-    """Digunakan pada Menu:
-    - Analysis -> Popular Emojis"""
+    f"""Digunakan pada Menu:
+    - Analysis -> Popular Emojis
+    
+   {sample_input},
+  "limit": 1000,
+  "page": 1,
+  "page_size": 10
+    }    
+    
+    """
     return get_popular_emojis(**params.dict())
 
 ########### SUMMARY MENU ##########
 
 @app.post("/api/v2/stats", tags=["Summary Menu"])
 async def stats_summary_analysis(params: StatsRequest):
-    """Digunakan pada Menu:
-    - Summary -> Stats"""
+    f"""Digunakan pada Menu:
+    - Summary -> Stats
+    
+    {sample_input},
+    "compare_with_previous": true
+    }    
+    """
     return get_stats_summary(**params.dict())
 
 ########### TOPICS MENU ##########
 @app.post("/api/v2/intent-emotions-region", tags=["Topics Menu"])
 async def intent_emotions_analysis(params: CommonParams):
-    """Digunakan pada Menu:
+    f"""Digunakan pada Menu:
     Untuk Parameter Keyword, gunakan list issue yang didapat ketika mendapat Topics
     - Topics:
         1. Intent Shares
         2. Emotions Shares
-        3. Top Regions"""
+        3. Top Regions
+        
+       {sample_input}
+       }  
+    """
     return get_intents_emotions_region_share(**params.dict())
 
 @app.post("/api/v2/topics-sentiment", tags=["Topics Menu"])
 async def topics_sentiment_analysis(params: CommonParams):
-    """Digunakan pada Menu:
+    f"""Digunakan pada Menu:
     - Topics:
-        Overall Sentiment -> di description per sentiment"""
+        Overall Sentiment -> di description per sentiment
+           
+    {sample_input}
+       } 
+        
+        """
     return get_topics_sentiment_analysis(**params.dict())
 
 @app.post("/api/v2/topics-overview", tags=["Topics Menu"])
 async def topics_overview_analysis(params: TopicsOverviewRequest):
-    """Digunakan pada Menu:
+    f"""Digunakan pada Menu:
     - Dashboard:
         Topics to Watch
     - Topics:
         Overview
     - Comparison
         Most viral topics
+
+       {sample_input},
+  "owner_id": "5",
+  "project_name": "gibran raka"
+       } 
     """
     return search_topics(**params.dict())
 
 @app.post("/api/v2/kol-overview", tags=["KOL Menu"])
 async def kol_overview_analysis(params: KolOverviewRequest):
-    """Digunakan pada Menu:
+    f"""Digunakan pada Menu:
     - Dashboard:
         KOL to Watch
     - Summary:
@@ -261,6 +386,10 @@ async def kol_overview_analysis(params: KolOverviewRequest):
         Kol to Watch
     - KOL:
         Key Opinion Leaders Overview
+
+       {sample_input},
+  "owner_id": "5",
+  "project_name": "gibran raka"
     """
     return search_kol(**params.dict())
 
