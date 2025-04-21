@@ -1,7 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Body
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from utils.analysis_overview import get_social_media_matrix
 from utils.analysis_sentiment_mentions import get_category_analytics
@@ -39,173 +39,421 @@ app = FastAPI(
 
 # Base model for common parameters
 class CommonParams(BaseModel):
-    keywords: Optional[List[str]] = None
-    search_exact_phrases: bool = False
-    case_sensitive: bool = False
-    sentiment: Optional[List[str]] = None
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-    date_filter: str = "last 30 days"
-    custom_start_date: Optional[str] = None
-    custom_end_date: Optional[str] = None
-    channels: Optional[List[str]] = None
-    importance: str = "all mentions"
-    influence_score_min: Optional[float] = None
-    influence_score_max: Optional[float] = None
-    region: Optional[List[str]] = None
-    language: Optional[List[str]] = None
-    domain: Optional[List[str]] = None
+    keywords: Optional[List[str]] = Field(
+        default=None, 
+        example=["prabowo", "gibran"],
+        description="Keywords to search for"
+    )
+    search_exact_phrases: bool = Field(
+        default=False, 
+        example=False,
+        description="Whether to search for exact phrases"
+    )
+    case_sensitive: bool = Field(
+        default=False, 
+        example=False,
+        description="Whether the search is case sensitive"
+    )
+    sentiment: Optional[List[str]] = Field(
+        default=None, 
+        example=["positive", "negative", "neutral"],
+        description="Sentiment filters"
+    )
+    start_date: Optional[str] = Field(
+        default=None, 
+        example=None,
+        description="Start date for filtering"
+    )
+    end_date: Optional[str] = Field(
+        default=None, 
+        example=None,
+        description="End date for filtering"
+    )
+    date_filter: str = Field(
+        default="last 30 days", 
+        example="last 30 days",
+        description="Date filter preset"
+    )
+    custom_start_date: Optional[str] = Field(
+        default=None, 
+        example="2025-04-01",
+        description="Custom start date (if date_filter is 'custom')"
+    )
+    custom_end_date: Optional[str] = Field(
+        default=None, 
+        example="2025-04-20",
+        description="Custom end date (if date_filter is 'custom')"
+    )
+    channels: Optional[List[str]] = Field(
+        default=None, 
+        example=["tiktok", "instagram", "news", "reddit", "facebook", "twitter", "linkedin", "youtube"],
+        description="Channel filters"
+    )
+    importance: str = Field(
+        default="all mentions", 
+        example="important mentions",
+        description="Importance filter"
+    )
+    influence_score_min: Optional[float] = Field(
+        default=None, 
+        example=0,
+        description="Minimum influence score"
+    )
+    influence_score_max: Optional[float] = Field(
+        default=None, 
+        example=100,
+        description="Maximum influence score"
+    )
+    region: Optional[List[str]] = Field(
+        default=None, 
+        example=["bandung", "jakarta"],
+        description="Region filters"
+    )
+    language: Optional[List[str]] = Field(
+        default=None, 
+        example=["indonesia", "english"],
+        description="Language filters"
+    )
+    domain: Optional[List[str]] = Field(
+        default=None, 
+        example=["kumparan.com", "detik.com"],
+        description="Domain filters"
+    )
 
 # Request models for specific endpoints
 class MentionsRequest(CommonParams):
-    sort_type: str = "recent"
-    sort_order: str = "desc"
-    page: int = 1
-    page_size: int = 10
-    source: Optional[List[str]] = None
+    sort_type: str = Field(
+        default="recent",
+        example="recent", 
+        description="Sort type: 'popular', 'recent', or 'relevant'"
+    )
+    sort_order: str = Field(
+        default="desc",
+        example="desc", 
+        description="Sort order: 'desc' or 'asc'"
+    )
+    page: int = Field(
+        default=1,
+        example=1, 
+        description="Page number"
+    )
+    page_size: int = Field(
+        default=10,
+        example=10, 
+        description="Number of items per page"
+    )
+    source: Optional[List[str]] = Field(
+        default=None,
+        example=None, 
+        description="Source filters"
+    )
 
 class FollowersRequest(CommonParams):
-    limit: int = 10
-    page: int = 1
-    page_size: int = 10
-    include_total_count: bool = True
+    limit: int = Field(
+        default=10,
+        example=10, 
+        description="Limit of results"
+    )
+    page: int = Field(
+        default=1,
+        example=1, 
+        description="Page number"
+    )
+    page_size: int = Field(
+        default=10,
+        example=10, 
+        description="Number of items per page"
+    )
+    include_total_count: bool = Field(
+        default=True,
+        example=True, 
+        description="Include total count in response"
+    )
 
 class EmojisRequest(CommonParams):
-    limit: int = 100
-    page: int = 1
-    page_size: int = 10
+    limit: int = Field(
+        default=100,
+        example=100, 
+        description="Limit of results"
+    )
+    page: int = Field(
+        default=1,
+        example=1, 
+        description="Page number"
+    )
+    page_size: int = Field(
+        default=10,
+        example=10, 
+        description="Number of items per page"
+    )
 
 class PresenceRequest(CommonParams):
-    interval: str = "week"
-    compare_with_topics: bool = True
-    num_topics_to_compare: int = 10
+    interval: str = Field(
+        default="week",
+        example="week", 
+        description="Interval: 'day', 'week', or 'month'"
+    )
+    compare_with_topics: bool = Field(
+        default=True,
+        example=True, 
+        description="Compare with topics"
+    )
+    num_topics_to_compare: int = Field(
+        default=10,
+        example=10, 
+        description="Number of topics to compare"
+    )
 
 class ShareOfVoiceRequest(CommonParams):
-    limit: int = 10
-    page: int = 1
-    page_size: int = 10
-    include_total_count: bool = True
+    limit: int = Field(
+        default=10,
+        example=10, 
+        description="Limit of results"
+    )
+    page: int = Field(
+        default=1,
+        example=1, 
+        description="Page number"
+    )
+    page_size: int = Field(
+        default=10,
+        example=10, 
+        description="Number of items per page"
+    )
+    include_total_count: bool = Field(
+        default=True,
+        example=True, 
+        description="Include total count in response"
+    )
 
 class StatsRequest(CommonParams):
-    compare_with_previous: bool = True
+    compare_with_previous: bool = Field(
+        default=True,
+        example=True, 
+        description="Compare with previous period"
+    )
 
 class HashtagsRequest(CommonParams):
-    limit: int = 100
-    page: int = 1
-    page_size: int = 10
-    sort_by: str = "mentions"
+    limit: int = Field(
+        default=100,
+        example=100, 
+        description="Limit of results"
+    )
+    page: int = Field(
+        default=1,
+        example=1, 
+        description="Page number"
+    )
+    page_size: int = Field(
+        default=10,
+        example=10, 
+        description="Number of items per page"
+    )
+    sort_by: str = Field(
+        default="mentions",
+        example="mentions", 
+        description="Sort by field"
+    )
 
 class LinksRequest(CommonParams):
-    limit: int = 10000
-    page: int = 1
-    page_size: int = 10
+    limit: int = Field(
+        default=10000,
+        example=1000, 
+        description="Limit of results"
+    )
+    page: int = Field(
+        default=1,
+        example=1, 
+        description="Page number"
+    )
+    page_size: int = Field(
+        default=10,
+        example=10, 
+        description="Number of items per page"
+    )
 
 class TopicsOverviewRequest(CommonParams):
-    owner_id: str
-    project_name: str
+    owner_id: str = Field(
+        ...,
+        example="5", 
+        description="Owner ID"
+    )
+    project_name: str = Field(
+        ...,
+        example="gibran raka", 
+        description="Project name"
+    )
 
 class KolOverviewRequest(CommonParams):
-    owner_id: str
-    project_name: str
+    owner_id: str = Field(
+        ...,
+        example="5", 
+        description="Owner ID"
+    )
+    project_name: str = Field(
+        ...,
+        example="gibran raka", 
+        description="Project name"
+    )
 
-
-sample_input = """
-Sample Input:
-Notes: - Keyword wajib ada, sisanya bisa dikosongkan
-       - custom_start_date dan custom_end_date kosongkan saja jika date_filter nya bukan custom
-
-{"keywords": [
-    "prabowo","gibran"
-  ],
-  "search_exact_phrases": false,
-  "case_sensitive": false,
-  "sentiment": [
-    "positive","negative","neutral"
-  ],
-  "date_filter": "last 30 days",
-  "custom_start_date": "2025-04-01",
-  "custom_end_date": "2025-04-20",
-  "channels": [
-    "tiktok","instagram","news","reddit","facebook","twitter","linkedin","youtube"
-  ],
-  "importance": "important mentions",
-  "influence_score_min": 0,
-  "influence_score_max": 100,
-  "region": [
-    "bandung","jakarta"
-  ],
-  "language": [
-    "indonesia","english"
-  ],
-  "domain": [
-    "kumparan.com","detik.com"
-  ]"""
-
-
+# Example object to demonstrate in docstrings
+example_json = {
+    "keywords": ["prabowo", "gibran"],
+    "search_exact_phrases": False,
+    "case_sensitive": False,
+    "sentiment": ["positive", "negative", "neutral"],
+    "date_filter": "last 30 days",
+    "custom_start_date": "2025-04-01",
+    "custom_end_date": "2025-04-20",
+    "channels": ["tiktok", "instagram", "news", "reddit", "facebook", "twitter", "linkedin", "youtube"],
+    "importance": "important mentions",
+    "influence_score_min": 0,
+    "influence_score_max": 100,
+    "region": ["bandung", "jakarta"],
+    "language": ["indonesia", "english"],
+    "domain": ["kumparan.com", "detik.com"]
+}
 
 ########### DASHBOARD MENU ##########
-@app.post("/api/v2/keyword-trends", tags = ["Dashboard Menu"])
-async def keyword_trends_analysis(params: CommonParams):
-    f"""Digunakan di menu:
+@app.post("/api/v2/keyword-trends", tags=["Dashboard Menu"])
+async def keyword_trends_analysis(
+    params: CommonParams = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example with common parameters",
+                "value": example_json
+            }
+        }
+    )
+):
+    """
+    Analisis tren kata kunci.
+    
+    Digunakan di menu:
     - Dashboard
     - Topics pada bagian Occurences
     - Summary
     - Analysis
     - Comparison
-    
-     {sample_input} 
-     }} """
+    """
     return get_keyword_trends(**params.dict())
 
-@app.post("/api/v2/context-of-discussion", tags = ["Dashboard Menu"])
-async def context_analysis(params: CommonParams):
-    f"""Digunakan di menu:
+@app.post("/api/v2/context-of-discussion", tags=["Dashboard Menu"])
+async def context_analysis(
+    params: CommonParams = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example with common parameters",
+                "value": example_json
+            }
+        }
+    )
+):
+    """
+    Analisis konteks diskusi.
+    
+    Digunakan di menu:
     - Dashboard
     - Topics
     - Analysis
     - Comparison
-
-     {sample_input} 
-     }}
     """
     return get_context_of_discussion(**params.dict())
 
-@app.post("/api/v2/list-of-mentions", tags = ["Dashboard Menu"])
-async def get_mentions_list(params: MentionsRequest):
-    f"""Digunakan di menu:
+@app.post("/api/v2/list-of-mentions", tags=["Dashboard Menu"])
+async def get_mentions_list(
+    params: MentionsRequest = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example with common parameters",
+                "value": {
+                    **example_json,
+                    "sort_type": "recent", 
+                    "sort_order": "desc",
+                    "page": 1,
+                    "page_size": 10
+                }
+            },
+            "popular": {
+                "summary": "Popular mentions example",
+                "description": "Example for retrieving popular mentions",
+                "value": {
+                    **example_json,
+                    "sort_type": "popular", 
+                    "sort_order": "desc",
+                    "page": 1,
+                    "page_size": 10
+                }
+            }
+        }
+    )
+):
+    """
+    Mendapatkan daftar mentions.
+    
+    Digunakan di menu:
     - Dashboard
     - Topics
     - Summary
     - Analysis
-    - Comparison -> Most Viral funakan sort_type = "popular"
+    - Comparison -> Most Viral gunakan sort_type = "popular"
     
-     {sample_input}, 
-  "sort_type": "recent", #'popular', 'recent', atau 'relevant'
-  "sort_order": "desc", #desc atau asc
-  "page": 1,
-  "page_size": 10,
-     }}
-    
+    Parameter tambahan:
+    - sort_type: 'popular', 'recent', atau 'relevant'
+    - sort_order: desc atau asc
+    - page: halaman yang ditampilkan
+    - page_size: jumlah data per halaman
     """
     return get_mentions(**params.dict())
 
 
 ########### ANALYSIS MENU ##########
-@app.post("/api/v2/analysis-overview", tags = ["Analysis Menu"])
-async def analysis_overview(params: CommonParams):
-    f"""Digunakan di menu:
+@app.post("/api/v2/analysis-overview", tags=["Analysis Menu"])
+async def analysis_overview(
+    params: CommonParams = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example with common parameters",
+                "value": example_json
+            }
+        }
+    )
+):
+    """
+    Gambaran umum analisis.
+    
+    Digunakan di menu:
     - Analysis -> Overview
     - Summary -> Summary
     - Comparison -> Overview
-
-    {sample_input}
-    }}
     """
     return get_social_media_matrix(**params.dict())
 
 @app.post("/api/v2/mention-sentiment-breakdown", tags=["Analysis Menu"])
-async def analysis_sentiment(params: CommonParams):
-    f"""Digunakan di menu:
+async def analysis_sentiment(
+    params: CommonParams = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example with common parameters",
+                "value": example_json
+            }
+        }
+    )
+):
+    """
+    Analisis sentimen dan breakdown mention.
+    
+    Digunakan di menu:
     - Analysis : 
         1. Mention by categories
         2. Sentiment by categories
@@ -216,163 +464,350 @@ async def analysis_sentiment(params: CommonParams):
     - Comparison:
         1. Sentiment breakdown
         2. Channels share -> gunakan Mention by categories
-
-    {sample_input}
-    }}
     """
     return get_category_analytics(**params.dict())
 
 
 @app.post("/api/v2/presence-score", tags=["Analysis Menu"])
-async def presence_score_analysis(params: PresenceRequest):
-    f"""Digunakan pada menu:
+async def presence_score_analysis(
+    params: PresenceRequest = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example for presence score",
+                "value": {
+                    **example_json,
+                    "interval": "week",
+                    "compare_with_topics": True,
+                    "num_topics_to_compare": 10
+                }
+            },
+            "daily": {
+                "summary": "Daily interval example",
+                "description": "Example with daily interval",
+                "value": {
+                    **example_json,
+                    "interval": "day",
+                    "compare_with_topics": True,
+                    "num_topics_to_compare": 5
+                }
+            }
+        }
+    )
+):
+    """
+    Analisis skor kehadiran.
+    
+    Digunakan pada menu:
     - Analysis : 
         Presence Score
     - Summary:
         Presence Score -> gunakan score nya saja
         
-        {sample_input},
-      "interval": "week", #day, week, month
-      "compare_with_topics": true,
-      "num_topics_to_compare": 10
-        }}
-        
-        """
+    Parameter tambahan:
+    - interval: "day", "week", "month"
+    - compare_with_topics: true/false
+    - num_topics_to_compare: jumlah topik untuk dibandingkan
+    """
     return get_presence_score(**params.dict())
 
 
 @app.post("/api/v2/most-share-of-voice", tags=["Analysis Menu"])
-async def share_of_voice_analysis(params: ShareOfVoiceRequest):
-    f"""Digunakan pada Menu:
+async def share_of_voice_analysis(
+    params: ShareOfVoiceRequest = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example for share of voice",
+                "value": {
+                    **example_json,
+                    "limit": 10,
+                    "page": 1,
+                    "page_size": 10,
+                    "include_total_count": True
+                }
+            }
+        }
+    )
+):
+    """
+    Analisis porsi suara yang paling banyak.
+    
+    Digunakan pada Menu:
     - Analysis -> Most Share of Voice
     
-    {sample_input},
-  "limit": 10,
-  "page": 1,
-  "page_size": 10,
-  "include_total_count": true
-    }}
+    Parameter tambahan:
+    - limit: batas jumlah data
+    - page: halaman yang ditampilkan
+    - page_size: jumlah data per halaman
+    - include_total_count: true/false untuk menampilkan total data
     """
     return get_share_of_voice(**params.dict())
 
 
 @app.post("/api/v2/most-followers", tags=["Analysis Menu"])
-async def most_followers_analysis(params: FollowersRequest):
-    f"""Digunakan pada Menu:
+async def most_followers_analysis(
+    params: FollowersRequest = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example for most followers",
+                "value": {
+                    **example_json,
+                    "limit": 10,
+                    "page": 1,
+                    "page_size": 10,
+                    "include_total_count": True
+                }
+            }
+        }
+    )
+):
+    """
+    Analisis pengikut terbanyak.
+    
+    Digunakan pada Menu:
     - Analysis -> Most Followers
 
-    {sample_input},
-  "limit": 10,
-  "page": 1,
-  "page_size": 10,
-  "include_total_count": true
-    }}
+    Parameter tambahan:
+    - limit: batas jumlah data
+    - page: halaman yang ditampilkan
+    - page_size: jumlah data per halaman
+    - include_total_count: true/false untuk menampilkan total data
     """
     return get_most_followers(**params.dict())
 
 
 @app.post("/api/v2/trending-hashtags", tags=["Analysis Menu"])
-async def trending_hashtags_analysis(params: HashtagsRequest):
-    f"""Digunakan pada Menu:
+async def trending_hashtags_analysis(
+    params: HashtagsRequest = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example for trending hashtags",
+                "value": {
+                    **example_json,
+                    "limit": 100,
+                    "page": 1,
+                    "page_size": 10,
+                    "sort_by": "mentions"
+                }
+            }
+        }
+    )
+):
+    """
+    Analisis tren hashtag.
+    
+    Digunakan pada Menu:
     - Analysis -> Trending hashtags
     
-    {sample_input},
-  "limit": 100,
-  "page": 1,
-  "page_size": 10,
-  "sort_by": "mentions" 
-    }}   
+    Parameter tambahan:
+    - limit: batas jumlah data
+    - page: halaman yang ditampilkan
+    - page_size: jumlah data per halaman
+    - sort_by: cara pengurutan data
     """
     return get_trending_hashtags(**params.dict())
 
-@app.post("/api/v2/trending-links", tags = ["Analysis Menu"])
-async def trending_links_analysis(params: LinksRequest):
-    f"""Digunakan pada Menu:
+@app.post("/api/v2/trending-links", tags=["Analysis Menu"])
+async def trending_links_analysis(
+    params: LinksRequest = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example for trending links",
+                "value": {
+                    **example_json,
+                    "limit": 1000,
+                    "page": 1,
+                    "page_size": 10
+                }
+            }
+        }
+    )
+):
+    """
+    Analisis tren tautan.
+    
+    Digunakan pada Menu:
     - Analysis -> Trending links
 
-        {sample_input},
-  "limit": 1000,
-  "page": 1,
-  "page_size": 10
-    }}    
-    
+    Parameter tambahan:
+    - limit: batas jumlah data
+    - page: halaman yang ditampilkan
+    - page_size: jumlah data per halaman
     """
     return get_trending_links(**params.dict())
 
 @app.post("/api/v2/popular-emojis", tags=["Analysis Menu"])
-async def popular_emojis_analysis(params: EmojisRequest):
-    f"""Digunakan pada Menu:
+async def popular_emojis_analysis(
+    params: EmojisRequest = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example for popular emojis",
+                "value": {
+                    **example_json,
+                    "limit": 100,
+                    "page": 1,
+                    "page_size": 10
+                }
+            }
+        }
+    )
+):
+    """
+    Analisis emoji populer.
+    
+    Digunakan pada Menu:
     - Analysis -> Popular Emojis
     
-   {sample_input},
-  "limit": 1000,
-  "page": 1,
-  "page_size": 10
-    }}    
-    
+    Parameter tambahan:
+    - limit: batas jumlah data
+    - page: halaman yang ditampilkan
+    - page_size: jumlah data per halaman
     """
     return get_popular_emojis(**params.dict())
 
 ########### SUMMARY MENU ##########
 
 @app.post("/api/v2/stats", tags=["Summary Menu"])
-async def stats_summary_analysis(params: StatsRequest):
-    f"""Digunakan pada Menu:
+async def stats_summary_analysis(
+    params: StatsRequest = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example for statistics summary",
+                "value": {
+                    **example_json,
+                    "compare_with_previous": True
+                }
+            }
+        }
+    )
+):
+    """
+    Analisis ringkasan statistik.
+    
+    Digunakan pada Menu:
     - Summary -> Stats
     
-    {sample_input},
-    "compare_with_previous": true
-    }}    
+    Parameter tambahan:
+    - compare_with_previous: true/false untuk membandingkan dengan periode sebelumnya
     """
     return get_stats_summary(**params.dict())
 
 ########### TOPICS MENU ##########
 @app.post("/api/v2/intent-emotions-region", tags=["Topics Menu"])
-async def intent_emotions_analysis(params: CommonParams):
-    f"""Digunakan pada Menu:
+async def intent_emotions_analysis(
+    params: CommonParams = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example with common parameters",
+                "value": example_json
+            }
+        }
+    )
+):
+    """
+    Analisis niat, emosi, dan wilayah.
+    
+    Digunakan pada Menu:
     Untuk Parameter Keyword, gunakan list issue yang didapat ketika mendapat Topics
     - Topics:
         1. Intent Shares
         2. Emotions Shares
         3. Top Regions
-        
-       {sample_input}
-       }}  
     """
     return get_intents_emotions_region_share(**params.dict())
 
 @app.post("/api/v2/topics-sentiment", tags=["Topics Menu"])
-async def topics_sentiment_analysis(params: CommonParams):
-    f"""Digunakan pada Menu:
+async def topics_sentiment_analysis(
+    params: CommonParams = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example with common parameters",
+                "value": example_json
+            }
+        }
+    )
+):
+    """
+    Analisis sentimen topik.
+    
+    Digunakan pada Menu:
     - Topics:
         Overall Sentiment -> di description per sentiment
-           
-    {sample_input}
-       }} 
-        
-        """
+    """
     return get_topics_sentiment_analysis(**params.dict())
 
 @app.post("/api/v2/topics-overview", tags=["Topics Menu"])
-async def topics_overview_analysis(params: TopicsOverviewRequest):
-    f"""Digunakan pada Menu:
+async def topics_overview_analysis(
+    params: TopicsOverviewRequest = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example for topics overview",
+                "value": {
+                    **example_json,
+                    "owner_id": "5",
+                    "project_name": "gibran raka"
+                }
+            }
+        }
+    )
+):
+    """
+    Gambaran umum topik.
+    
+    Digunakan pada Menu:
     - Dashboard:
         Topics to Watch
     - Topics:
         Overview
     - Comparison
         Most viral topics
-
-       {sample_input},
-  "owner_id": "5",
-  "project_name": "gibran raka"
-       }}
+        
+    Parameter tambahan:
+    - owner_id: ID pemilik project
+    - project_name: Nama project
     """
     return search_topics(**params.dict())
 
 @app.post("/api/v2/kol-overview", tags=["KOL Menu"])
-async def kol_overview_analysis(params: KolOverviewRequest):
-    f"""Digunakan pada Menu:
+async def kol_overview_analysis(
+    params: KolOverviewRequest = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example for KOL overview",
+                "value": {
+                    **example_json,
+                    "owner_id": "5",
+                    "project_name": "gibran raka"
+                }
+            }
+        }
+    )
+):
+    """
+    Gambaran umum Key Opinion Leaders.
+    
+    Digunakan pada Menu:
     - Dashboard:
         KOL to Watch
     - Summary:
@@ -381,10 +816,9 @@ async def kol_overview_analysis(params: KolOverviewRequest):
         Kol to Watch
     - KOL:
         Key Opinion Leaders Overview
-
-       {sample_input},
-  "owner_id": "5",
-  "project_name": "gibran raka" }}
+        
+    Parameter tambahan:
+    - owner_id: ID pemilik project
+    - project_name: Nama project
     """
     return search_kol(**params.dict())
-
