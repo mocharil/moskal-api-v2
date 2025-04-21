@@ -154,10 +154,7 @@ async def keyword_trends_analysis(params: CommonParams):
     - Comparison
     
      {sample_input} 
-     }
-    
-    
-    """
+     }} """
     return get_keyword_trends(**params.dict())
 
 @app.post("/api/v2/context-of-discussion", tags = ["Dashboard Menu"])
@@ -169,7 +166,7 @@ async def context_analysis(params: CommonParams):
     - Comparison
 
      {sample_input} 
-     }
+     }}
     """
     return get_context_of_discussion(**params.dict())
 
@@ -187,7 +184,7 @@ async def get_mentions_list(params: MentionsRequest):
   "sort_order": "desc", #desc atau asc
   "page": 1,
   "page_size": 10,
-     }
+     }}
     
     """
     return get_mentions(**params.dict())
@@ -202,7 +199,7 @@ async def analysis_overview(params: CommonParams):
     - Comparison -> Overview
 
     {sample_input}
-    }
+    }}
     """
     return get_social_media_matrix(**params.dict())
 
@@ -221,7 +218,7 @@ async def analysis_sentiment(params: CommonParams):
         2. Channels share -> gunakan Mention by categories
 
     {sample_input}
-    }
+    }}
     """
     return get_category_analytics(**params.dict())
 
@@ -238,7 +235,7 @@ async def presence_score_analysis(params: PresenceRequest):
       "interval": "week", #day, week, month
       "compare_with_topics": true,
       "num_topics_to_compare": 10
-        }
+        }}
         
         """
     return get_presence_score(**params.dict())
@@ -254,7 +251,7 @@ async def share_of_voice_analysis(params: ShareOfVoiceRequest):
   "page": 1,
   "page_size": 10,
   "include_total_count": true
-    }
+    }}
     """
     return get_share_of_voice(**params.dict())
 
@@ -269,7 +266,7 @@ async def most_followers_analysis(params: FollowersRequest):
   "page": 1,
   "page_size": 10,
   "include_total_count": true
-    }
+    }}
     """
     return get_most_followers(**params.dict())
 
@@ -284,9 +281,7 @@ async def trending_hashtags_analysis(params: HashtagsRequest):
   "page": 1,
   "page_size": 10,
   "sort_by": "mentions" 
-    }    
-
-    
+    }}   
     """
     return get_trending_hashtags(**params.dict())
 
@@ -299,7 +294,7 @@ async def trending_links_analysis(params: LinksRequest):
   "limit": 1000,
   "page": 1,
   "page_size": 10
-    }    
+    }}    
     
     """
     return get_trending_links(**params.dict())
@@ -313,7 +308,7 @@ async def popular_emojis_analysis(params: EmojisRequest):
   "limit": 1000,
   "page": 1,
   "page_size": 10
-    }    
+    }}    
     
     """
     return get_popular_emojis(**params.dict())
@@ -327,7 +322,7 @@ async def stats_summary_analysis(params: StatsRequest):
     
     {sample_input},
     "compare_with_previous": true
-    }    
+    }}    
     """
     return get_stats_summary(**params.dict())
 
@@ -342,7 +337,7 @@ async def intent_emotions_analysis(params: CommonParams):
         3. Top Regions
         
        {sample_input}
-       }  
+       }}  
     """
     return get_intents_emotions_region_share(**params.dict())
 
@@ -353,7 +348,7 @@ async def topics_sentiment_analysis(params: CommonParams):
         Overall Sentiment -> di description per sentiment
            
     {sample_input}
-       } 
+       }} 
         
         """
     return get_topics_sentiment_analysis(**params.dict())
@@ -371,7 +366,7 @@ async def topics_overview_analysis(params: TopicsOverviewRequest):
        {sample_input},
   "owner_id": "5",
   "project_name": "gibran raka"
-       } 
+       }}
     """
     return search_topics(**params.dict())
 
@@ -389,7 +384,7 @@ async def kol_overview_analysis(params: KolOverviewRequest):
 
        {sample_input},
   "owner_id": "5",
-  "project_name": "gibran raka"
+  "project_name": "gibran raka" }}
     """
     return search_kol(**params.dict())
 
