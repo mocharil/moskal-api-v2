@@ -2,6 +2,8 @@ from fastapi import FastAPI, Body
 from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel, Field
+from fastapi.middleware.cors import CORSMiddleware  # Import CORS middleware
+
 
 from utils.analysis_overview import get_social_media_matrix
 from utils.analysis_sentiment_mentions import get_category_analytics
@@ -36,6 +38,17 @@ app = FastAPI(
     description="API for analyzing social media data from Elasticsearch",
     version="1.0.0"
 )
+
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
+
 
 # Base model for common parameters
 class CommonParams(BaseModel):
