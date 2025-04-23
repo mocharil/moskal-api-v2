@@ -159,7 +159,8 @@ def search_kol(
             sentiment = ['positive', 'negative', 'neutral']
         #pake filter berdasarkan input user
         result = get_mentions(
-            source= ["issue", "followers","user_influence_score",
+            source= ["issue","user_connections","user_followers","user_influence_score",
+                     'user_image_url',"engagement_rate",
                  "influence_score","reach_score", "viral_score",
                  "sentiment", "link_post","user_category","username",'channel'],
             page_size=10000,
@@ -195,7 +196,10 @@ def search_kol(
         kol = df_data[~df_data['user_category'].isna()]
         kol['link_user'] = kol.apply(lambda s: create_link_user(s), axis=1)        
         
+        for i in set(['user_connections','user_followers']) - set(kol):
+            kol[i] = 0
         
+        kol['user_followers'] = kol['user_connections']+kol['user_followers']
         
         # Your groupby with sentiment pivot
         agg_kol = kol.groupby(['link_user']).agg({
@@ -204,6 +208,9 @@ def search_kol(
             'reach_score': 'sum',
             'channel': 'max',
             'username': 'max',
+            'user_image_url':'max',
+            'user_followers':'max',
+            "engagement_rate":'sum',
             'issue': lambda s: list(set(s)),
             'user_category': 'max',
             'user_influence_score': lambda s: max(s)*100
