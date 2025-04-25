@@ -338,6 +338,26 @@ def get_mentions(
     if source is not None:
         query["_source"] = source
     
+
+    #Filter hanya data yang ada viral_score dan sentiment saja yang diambil
+    mention_filter = {
+            "bool": {
+            "must": [
+                {
+                "exists": {
+                    "field": "viral_score"
+                }
+                },
+                {
+                "exists": {
+                    "field": "sentiment"
+                }
+                }
+            ]
+        }
+    }
+    query["query"]["bool"]["filter"].append(mention_filter)
+
     # Jalankan query
     try:
         response = es.search(
