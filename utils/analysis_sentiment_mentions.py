@@ -407,12 +407,12 @@ def get_category_analytics(
         
         return {
     "mentions_by_category":mentions_by_category,
-    'sentiemnt_by_category':sentiment_by_category,
+    'sentiment_by_category':sentiment_by_category,
     'sentiment_breakdown':sentiment_breakdown}
         
     except Exception as e:
         print(f"Error querying Elasticsearch: {e}")
         return {
     "mentions_by_category":{},
-    'sentiemnt_by_category':{},
+    'sentiment_by_category':{},
     'sentiment_breakdown':{}}
