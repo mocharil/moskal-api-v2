@@ -7,6 +7,7 @@ media sosial dengan dukungan pagination dan berbagai opsi sorting.
 
 import argparse
 import json
+import re
 import pandas as pd
 from datetime import datetime
 from typing import Dict, List, Literal, Optional, Union
