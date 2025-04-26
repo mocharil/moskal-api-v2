@@ -108,7 +108,7 @@ def search_topics(
             sentiment = ['positive', 'negative', 'neutral']
         #pake filter berdasarkan input user
         result = get_mentions(
-            source= ["issue", "reach_score", "viral_score", "sentiment", "link_post"],
+            source= ["issue", "reach_score", "viral_score", "sentiment", "link_post","channel"],
             page_size=10000,
             es_host=es_host,    
             es_username=es_username,
