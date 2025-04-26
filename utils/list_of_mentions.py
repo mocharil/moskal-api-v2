@@ -358,6 +358,7 @@ def get_mentions(
     }
     query["query"]["bool"]["filter"].append(mention_filter)
 
+    print(query)
     # Jalankan query
     try:
         response = es.search(
@@ -367,7 +368,17 @@ def get_mentions(
         
         # Dapatkan posts
         posts = [hit["_source"] for hit in response["hits"]["hits"]]
-        
+
+        for i in posts:
+            if i['channel'] == 'news':
+                if 'username' not in i:
+                    username = re.findall(r'https?://(.*?)(?:/|$)',i['link_post'])[0].replace('www.','')
+                    i.update({'username':username})
+
+                if 'user_image_url' not in i:
+                    i.update({"user_image_url":f"https://logo.clearbit.com/{i['username']}"})
+
+
         # Dapatkan total posts
         total_posts = response["hits"]["total"]["value"]
         
