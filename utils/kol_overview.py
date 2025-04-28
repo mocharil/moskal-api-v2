@@ -1,7 +1,15 @@
 from utils.es_client import get_elasticsearch_client
 from utils.list_of_mentions import get_mentions
 import pandas as pd
-import uuid
+import uuid, numpy as np
+from elasticsearch import Elasticsearch
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Buat koneksi ke Elasticsearch
+es = get_elasticsearch_client()
 
 def create_link_user(df):
     if df['channel'] == 'twitter':
@@ -44,59 +52,13 @@ def add_negative_driver_flag(df):
     
     return df
 
-def map_issues_to_unified(final_kol, final_result):
-    """
-    For each list of issues in final_kol, find the corresponding unified_issue from final_result
-    
-    Args:
-        final_kol: DataFrame with 'issue' column containing lists of issues
-        final_result: DataFrame with 'unified_issue' and 'list_issue' columns
-    
-    Returns:
-        DataFrame with added 'unified_issue' column
-    """
-    # Create a mapping dictionary from issues to unified_issues
-    issue_to_unified = {}
-    
-    # Iterate through final_result to build the mapping
-    for _, row in final_result.iterrows():
-        unified = row['unified_issue']
-        issues_list = row['list_issue']
-        
-        # Skip if list_issue is not a list
-        if not isinstance(issues_list, list):
-            continue
-            
-        # Map each issue in the list to its unified issue
-        for issue in issues_list:
-            issue_to_unified[issue] = unified
-    
-    # Function to map a list of issues to their unified issues
-    def get_unified_issues(issues_list):
-        if not isinstance(issues_list, list):
-            return []
-        
-        # Get unified issues for each issue in the list
-        unified_issues = [issue_to_unified.get(issue) for issue in issues_list if issue in issue_to_unified]
-        
-        # Remove duplicates and None values
-        unified_issues = [issue for issue in unified_issues if issue is not None]
-        return list(set(unified_issues))
-    
-    # Add unified_issue column to final_kol
-    final_kol_with_unified = final_kol.copy()
-    final_kol_with_unified['unified_issue'] = final_kol['issue'].apply(get_unified_issues)
-    
-    return final_kol_with_unified
-
 def create_uuid(keyword):
     # Gunakan namespace standar (ada juga untuk URL, DNS, dll)
     namespace = uuid.NAMESPACE_DNS
 
     return uuid.uuid5(namespace, keyword)
 
-def search_kol(  
-    owner_id = None,
+def search_kol(   owner_id = None,
     project_name = None,
     es_host=None,
     es_username=None,
@@ -120,45 +82,13 @@ def search_kol(
     region=None,
     language=None,
     domain=None):
-    
-    print('(((((((((((((((((((((( MASUK ))))))))))))))))))))))')
-    es = get_elasticsearch_client(
-        es_host=es_host,
-        es_username=es_username,
-        es_password=es_password,
-        use_ssl=use_ssl,
-        verify_certs=verify_certs,
-        ca_certs=ca_certs
-    )
-    
-    
-    #PROCESS
-    id_ = create_uuid("{}_{}".format(owner_id, project_name))
 
-    query = {
-        "source":[],
-      "query": {
-        "match": {
-          "_id": id_
-        }
-      }
+    print('get all data mentions')
 
-    }
+    if not sentiment:
+        sentiment = ['positive','negative','neutral']
 
-    response = es.search(
-        index='topics',
-        body=query
-    )
-
-    data_project = [hit["_source"] for hit in response["hits"]["hits"]]
-    if data_project:
-
-        #project sudah tergenerate
-        final_result = pd.DataFrame(data_project[0]['topics'])
-        if not sentiment:
-            sentiment = ['positive', 'negative', 'neutral']
-        #pake filter berdasarkan input user
-        result = get_mentions(
+    result = get_mentions(
             source= ["issue","user_connections","user_followers","user_influence_score",
                      'user_image_url',"engagement_rate",
                  "influence_score","reach_score", "viral_score",
@@ -188,19 +118,31 @@ def search_kol(
             domain=domain,
             sort_type = 'popular'
         )
+    
 
-        df_data = pd.DataFrame(result['data'])
-        if 'user_category' not in df_data:
-            return []
-        
-        kol = df_data[~df_data['user_category'].isna()]
+    if not result['data']:
+        return []
+    else:
+        kol = pd.DataFrame(result['data'])
+        print(kol.shape)
+ 
+        print('set metrics')
+        for i in set(['user_influence_score','user_followers']) - set(kol):
+            kol[i] = 0
+
+        if 'user_category' not in kol:
+            kol['user_category'] = 'News Account'
+
+        kol[['user_influence_score','user_followers']] = kol[['user_influence_score','user_followers']].fillna(0)
+        kol['user_category'] = kol['user_category'].fillna('')
+
         kol['link_user'] = kol.apply(lambda s: create_link_user(s), axis=1)        
-        
+
         for i in set(['user_connections','user_followers']) - set(kol):
             kol[i] = 0
-        
+
         kol['user_followers'] = kol['user_connections']+kol['user_followers']
-        
+
         # Your groupby with sentiment pivot
         agg_kol = kol.groupby(['link_user']).agg({
             'link_post': 'size',
@@ -230,20 +172,55 @@ def search_kol(
             col_name = f'sentiment_{sentiment}'
             if col_name not in final_kol.columns:
                 final_kol[col_name] = 0        
-        
+
 
         # Apply the function to final_kol
-        final_kol = add_negative_driver_flag(final_kol)
+        final_kol = add_negative_driver_flag(final_kol).reset_index()
 
-        hasil = map_issues_to_unified(final_kol, final_result)     
+        list_issue = [j for i in final_kol['issue'] for j in i]
+
+        print('check topic map')
+        #check issue mana yang sudah termap dan mana yg belum
+        query_body = {
+            "_source":["unified_issue","list_issue"],
+            "query":{
+
+                "bool": {
+
+                    "must":[
+
+                        {        "match": {"project_name.keyword":project_name}   },
+                        {        "terms": {"list_issue.keyword":list_issue}  },
+
+
+                    ]
+
+                }
+            }
+        }
+
+        response = es.search(
+            index="topic_cluster",
+            body=query_body,
+            size = 10000
+        )
+        top_map = [i['_source'] for i in response['hits']['hits']]
+        dict_issue = {}
+        if top_map:
+            print('get map')
+            df_map = pd.DataFrame(top_map)
+            df_map = df_map.explode('list_issue').drop_duplicates('list_issue')
+            
+            for _,i in df_map.iterrows():
+                dict_issue.update({i['list_issue']:i['unified_issue']})
+
+        final_kol['unified_issue'] = final_kol['issue'].transform(lambda s: list(set([dict_issue.get(i,i) for i in s])))
+        final_kol['user_category'] = final_kol.apply(lambda s: 'News Account' if s['channel']=='news' else s['user_category'], axis=1)
+        final_kol.drop('issue', axis=1, inplace=True)
+        final_kol['KOL_score'] = (final_kol['viral_score'] + final_kol['reach_score']) * \
+                  np.log(final_kol['user_followers'] + 1.1) * np.log(final_kol['link_post'] + 1.1)* \
+                  (final_kol['user_influence_score'] + 1.1)
+
+        return final_kol.sort_values('KOL_score', ascending = False)[:100].to_dict(orient = 'records')
         
-        hasil = hasil.sort_values('link_post', ascending = False).reset_index()
-   
-        hasil['share_of_voice'] = hasil['link_post']/hasil['link_post'].sum()*100
-    
-        hasil.rename(columns = {'link_post':'total_mentions',
-                                'user_influence_score':'influence_score'})
-    
-    
         
-        return hasil[hasil['unified_issue'].transform(lambda s: s!=[])].to_dict(orient = 'records')

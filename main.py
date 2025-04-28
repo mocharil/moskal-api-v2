@@ -12,7 +12,7 @@ from utils.intent_emotions_region import get_intents_emotions_region_share
 from utils.keyword_trends import get_keyword_trends
 from utils.list_of_mentions import get_mentions
 from utils.topics_sentiment_analysis import get_topics_sentiment_analysis
-from utils.topics_overview import search_topics
+from utils.topics_overview import topic_overviews
 from utils.kol_overview import search_kol
 from utils.most_followers import get_most_followers
 from utils.popular_emojis import get_popular_emojis
@@ -798,7 +798,7 @@ async def topics_overview_analysis(
     - owner_id: ID pemilik project
     - project_name: Nama project
     """
-    return search_topics(**params.dict())
+    return topic_overviews(**params.dict())
 
 @app.post("/api/v2/kol-overview", tags=["KOL Menu"])
 async def kol_overview_analysis(

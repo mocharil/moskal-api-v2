@@ -18,10 +18,14 @@ load_dotenv()
 urllib3.disable_warnings()
 warnings.filterwarnings("ignore")
 
-def  get_elasticsearch_client(
-        es_host, es_username, es_password,
-        use_ssl,verify_certs,ca_certs
-    ):
+def get_elasticsearch_client(
+            es_host=None,
+        es_username=None,
+        es_password=None,
+        use_ssl=None,
+        verify_certs=None,
+        ca_certs=None
+):
     """
     Create connection to Elasticsearch using environment variables
     
@@ -31,12 +35,12 @@ def  get_elasticsearch_client(
         Elasticsearch client instance
     """
     # Get ES connection params from environment
-    es_host = os.getenv('ES_HOST', 'localhost:9200') if not es_host else es_host
-    es_username = os.getenv('ES_USERNAME') if not es_username else es_username
-    es_password = os.getenv('ES_PASSWORD') if not es_password else es_password
-    use_ssl = os.getenv('USE_SSL', 'false').lower() == 'true' if not use_ssl else use_ssl
-    verify_certs = os.getenv('VERIFY_CERTS', 'false').lower() == 'true' if not verify_certs else verify_certs
-    ca_certs = os.getenv('CA_CERTS') if not ca_certs else ca_certs
+    es_host = os.getenv('ES_HOST', 'localhost:9200')
+    es_username = os.getenv('ES_USERNAME')
+    es_password = os.getenv('ES_PASSWORD')
+    use_ssl = os.getenv('USE_SSL', 'false').lower() == 'true'
+    verify_certs = os.getenv('VERIFY_CERTS', 'false').lower() == 'true'
+    ca_certs = os.getenv('CA_CERTS')
     
     # Check if URL already has protocol
     if not es_host.startswith(('http://', 'https://')):
@@ -66,21 +70,6 @@ def  get_elasticsearch_client(
         return es
     except Exception as e:
         print(f"Connection error: {e}")
-        print("\nTry these solutions:")
-        print("1. Make sure Elasticsearch is running and accessible")
-        print("2. Check protocol (http/https) and port")
-        print("3. If using HTTPS:")
-        print("   - set USE_SSL=true in .env")
-        print("   - If using self-signed certificate, set VERIFY_CERTS=false in .env")
-        print("4. Check ES_USERNAME and ES_PASSWORD in .env")
-        print("5. Try direct connection without SSL: http://localhost:9200")
+
         return None
-        print("\nTry these solutions:")
-        print("1. Make sure Elasticsearch is running and accessible")
-        print("2. Check protocol (http/https) and port")
-        print("3. If using HTTPS:")
-        print("   - set use_ssl=True")
-        print("   - If using self-signed certificate, set verify_certs=False")
-        print("4. Check username and password")
-        print("5. Try direct connection without SSL: http://localhost:9200")
-        return None
+ 
