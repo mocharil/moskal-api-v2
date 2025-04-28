@@ -329,7 +329,7 @@ example_json = {
 
 ########### DASHBOARD MENU ##########
 @app.post("/api/v2/keyword-trends", tags=["Dashboard Menu"])
-async def keyword_trends_analysis(
+def keyword_trends_analysis(
     params: CommonParams = Body(
         ...,
         examples={
@@ -354,7 +354,7 @@ async def keyword_trends_analysis(
     return get_keyword_trends(**params.dict())
 
 @app.post("/api/v2/context-of-discussion", tags=["Dashboard Menu"])
-async def context_analysis(
+def context_analysis(
     params: CommonParams = Body(
         ...,
         examples={
@@ -378,7 +378,7 @@ async def context_analysis(
     return get_context_of_discussion(**params.dict())
 
 @app.post("/api/v2/list-of-mentions", tags=["Dashboard Menu"])
-async def get_mentions_list(
+def get_mentions_list(
     params: MentionsRequest = Body(
         ...,
         examples={
@@ -428,7 +428,7 @@ async def get_mentions_list(
 
 ########### ANALYSIS MENU ##########
 @app.post("/api/v2/analysis-overview", tags=["Analysis Menu"])
-async def analysis_overview(
+def analysis_overview(
     params: CommonParams = Body(
         ...,
         examples={
@@ -451,7 +451,7 @@ async def analysis_overview(
     return get_social_media_matrix(**params.dict())
 
 @app.post("/api/v2/mention-sentiment-breakdown", tags=["Analysis Menu"])
-async def analysis_sentiment(
+def analysis_sentiment(
     params: CommonParams = Body(
         ...,
         examples={
@@ -482,7 +482,7 @@ async def analysis_sentiment(
 
 
 @app.post("/api/v2/presence-score", tags=["Analysis Menu"])
-async def presence_score_analysis(
+def presence_score_analysis(
     params: PresenceRequest = Body(
         ...,
         examples={
@@ -527,7 +527,7 @@ async def presence_score_analysis(
 
 
 @app.post("/api/v2/most-share-of-voice", tags=["Analysis Menu"])
-async def share_of_voice_analysis(
+def share_of_voice_analysis(
     params: ShareOfVoiceRequest = Body(
         ...,
         examples={
@@ -561,7 +561,7 @@ async def share_of_voice_analysis(
 
 
 @app.post("/api/v2/most-followers", tags=["Analysis Menu"])
-async def most_followers_analysis(
+def most_followers_analysis(
     params: FollowersRequest = Body(
         ...,
         examples={
@@ -595,7 +595,7 @@ async def most_followers_analysis(
 
 
 @app.post("/api/v2/trending-hashtags", tags=["Analysis Menu"])
-async def trending_hashtags_analysis(
+def trending_hashtags_analysis(
     params: HashtagsRequest = Body(
         ...,
         examples={
@@ -628,7 +628,7 @@ async def trending_hashtags_analysis(
     return get_trending_hashtags(**params.dict())
 
 @app.post("/api/v2/trending-links", tags=["Analysis Menu"])
-async def trending_links_analysis(
+def trending_links_analysis(
     params: LinksRequest = Body(
         ...,
         examples={
@@ -659,7 +659,7 @@ async def trending_links_analysis(
     return get_trending_links(**params.dict())
 
 @app.post("/api/v2/popular-emojis", tags=["Analysis Menu"])
-async def popular_emojis_analysis(
+def popular_emojis_analysis(
     params: EmojisRequest = Body(
         ...,
         examples={
@@ -692,7 +692,7 @@ async def popular_emojis_analysis(
 ########### SUMMARY MENU ##########
 
 @app.post("/api/v2/stats", tags=["Summary Menu"])
-async def stats_summary_analysis(
+def stats_summary_analysis(
     params: StatsRequest = Body(
         ...,
         examples={
@@ -720,7 +720,7 @@ async def stats_summary_analysis(
 
 ########### TOPICS MENU ##########
 @app.post("/api/v2/intent-emotions-region", tags=["Topics Menu"])
-async def intent_emotions_analysis(
+def intent_emotions_analysis(
     params: CommonParams = Body(
         ...,
         examples={
@@ -745,7 +745,7 @@ async def intent_emotions_analysis(
     return get_intents_emotions_region_share(**params.dict())
 
 @app.post("/api/v2/topics-sentiment", tags=["Topics Menu"])
-async def topics_sentiment_analysis(
+def topics_sentiment_analysis(
     params: CommonParams = Body(
         ...,
         examples={
@@ -767,7 +767,7 @@ async def topics_sentiment_analysis(
     return get_topics_sentiment_analysis(**params.dict())
 
 @app.post("/api/v2/topics-overview", tags=["Topics Menu"])
-async def topics_overview_analysis(
+def topics_overview_analysis(
     params: TopicsOverviewRequest = Body(
         ...,
         examples={
@@ -801,7 +801,7 @@ async def topics_overview_analysis(
     return topic_overviews(**params.dict())
 
 @app.post("/api/v2/kol-overview", tags=["KOL Menu"])
-async def kol_overview_analysis(
+def kol_overview_analysis(
     params: KolOverviewRequest = Body(
         ...,
         examples={

@@ -196,18 +196,23 @@ def topic_existing_data(
     if undone:
         print(f'Predicting {len(undone)} new issues')
         data_undone = pd.DataFrame(undone, columns=['issue']).reset_index()
-        hasil = check_new_data(data_undone[:100], unified_issue_map)
+        try:
+            hasil = check_new_data(data_undone[:100], unified_issue_map)
 
-        df_exploded = hasil.explode('list_issue_id')
-        df_exploded = df_exploded.rename(columns={"list_issue_id": "index"})
+            df_exploded = hasil.explode('list_issue_id')
+            df_exploded = df_exploded.rename(columns={"list_issue_id": "index"})
 
-        df_undone = pd.merge(
-            df_exploded[['index', 'unified_issue', 'description']],
-            data_undone,
-            on='index',
-            how='left'
-        ).drop('index', axis=1)
-        is_ingest = True
+            df_undone = pd.merge(
+                df_exploded[['index', 'unified_issue', 'description']],
+                data_undone,
+                on='index',
+                how='left'
+            ).drop('index', axis=1)
+            is_ingest = True
+        except Exception as e:
+            print('---->',e)
+            df_undone = pd.DataFrame()
+
     else:
         print('All issues already predicted')
 
