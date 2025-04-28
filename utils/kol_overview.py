@@ -221,6 +221,8 @@ def search_kol(   owner_id = None,
                   np.log(final_kol['user_followers'] + 1.1) * np.log(final_kol['link_post'] + 1.1)* \
                   (final_kol['user_influence_score'] + 1.1)
 
+
+        final_kol["share_of_voice"] = final_kol["link_post"]/final_kol["link_post"].sum()*100
         return final_kol.sort_values('KOL_score', ascending = False)[:100].to_dict(orient = 'records')
         
         
