@@ -214,7 +214,7 @@ def search_kol(   owner_id = None,
             for _,i in df_map.iterrows():
                 dict_issue.update({i['list_issue']:i['unified_issue']})
 
-        final_kol['unified_issue'] = final_kol['issue'].transform(lambda s: list(set([dict_issue.get(i,i) for i in s])))
+        final_kol['unified_issue'] = final_kol['issue'].transform(lambda s: list(set([dict_issue.get(i,i) for i in s]))[:5])
         final_kol['user_category'] = final_kol.apply(lambda s: 'News Account' if s['channel']=='news' else s['user_category'], axis=1)
         final_kol.drop('issue', axis=1, inplace=True)
         final_kol['most_viral'] = (final_kol['viral_score'] + final_kol['reach_score']) * \
