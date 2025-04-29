@@ -217,12 +217,19 @@ def search_kol(   owner_id = None,
         final_kol['unified_issue'] = final_kol['issue'].transform(lambda s: list(set([dict_issue.get(i,i) for i in s])))
         final_kol['user_category'] = final_kol.apply(lambda s: 'News Account' if s['channel']=='news' else s['user_category'], axis=1)
         final_kol.drop('issue', axis=1, inplace=True)
-        final_kol['KOL_score'] = (final_kol['viral_score'] + final_kol['reach_score']) * \
+        final_kol['most_viral'] = (final_kol['viral_score'] + final_kol['reach_score']) * \
                   np.log(final_kol['user_followers'] + 1.1) * np.log(final_kol['link_post'] + 1.1)* \
                   (final_kol['user_influence_score'] + 1.1)
 
 
         final_kol["share_of_voice"] = final_kol["link_post"]/final_kol["link_post"].sum()*100
-        return final_kol.sort_values('KOL_score', ascending = False)[:100].to_dict(orient = 'records')
+        
+        most_negative_kol = final_kol.sort_values(['is_negative_driver','sentiment_negative','most_viral'], ascending = False)[:100]
+        most_viral_kol = final_kol.sort_values('most_viral', ascending = False)[:100]
+        
+        final_kol = pd.concat([most_negative_kol,most_viral_kol]).drop_duplicates('link_user')
+
+
+        return final_kol.sort_values(['is_negative_driver','sentiment_negative','most_viral'], ascending = False)[:150].to_dict(orient = 'records')
         
         
