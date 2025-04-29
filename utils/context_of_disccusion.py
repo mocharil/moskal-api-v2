@@ -316,7 +316,8 @@ def get_context_of_discussion(
     
     # Pastikan limit cukup besar untuk mendapat semua data yang diperlukan
     es_limit = max(limit, page * page_size)
-    
+
+    es_limit = 1000
     # PERBAIKAN: Gunakan pendekatan non-nested untuk field list_word
     # Karena berdasarkan mapping, list_word adalah field keyword biasa, bukan nested
     alt_query = {
@@ -422,7 +423,7 @@ def get_context_of_discussion(
         start_index = (page - 1) * page_size
         end_index = min(start_index + page_size, total_items)
         
-        paginated_data = hashtag_data[start_index:end_index]
+        paginated_data = hashtag_data[:50]
         
         # Buat hasil dengan informasi pagination
         result = {
