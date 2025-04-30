@@ -42,11 +42,6 @@ def get_topics_sentiment_analysis(
             'negative_topics': "..."
         }
     """
-    return {
-  "positive_topics": "Positive posts largely focus on Prabowo Subianto's activities and initiatives, including agricultural programs (rice and palm oil), infrastructure development, and national food security.  There's also celebration of national holidays and anniversaries (BNN, TNI AU), along with expressions of gratitude and support for his leadership.  Several posts highlight positive meetings between Prabowo and other political figures, such as Megawati Soekarnoputri, emphasizing national unity and cooperation.",
-  "negative_topics": "Negative posts express concerns about various issues, including the potential for abuse of power (RUU TNI/Polri), corruption within government institutions and the judiciary, and the uneven distribution of resources and opportunities.  There are also criticisms of specific government policies (MBG, Koperasi Merah Putih), highlighting concerns about implementation, transparency, and potential for misuse of funds.  Several posts also express concerns about public safety and transportation issues."
-}
-
     # Mendapatkan post positif
     post_positive = get_mentions(
         es_host=es_host,
