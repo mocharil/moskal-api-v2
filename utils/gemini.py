@@ -54,7 +54,7 @@ def get_model(model_name=DEFAULT_MODEL):
         model_cache[model_name] = GenerativeModel(model_name)
     return model_cache[model_name]
 
-def call_gemini(prompt, model_name=DEFAULT_MODEL):
+def call_gemini_backup(prompt, model_name=DEFAULT_MODEL):
     """
     Generate content using Gemini model
     
@@ -86,3 +86,22 @@ def call_gemini(prompt, model_name=DEFAULT_MODEL):
     
     print(full_result)
     return full_result.strip()
+
+
+
+def call_gemini(prompt, model_name=DEFAULT_MODEL):
+    try:
+        model = get_model(model_name)
+
+        responses = model.generate_content(
+            [prompt],
+            safety_settings=safety_config,
+            generation_config=config,
+            stream=False  # disable streaming in prod
+        )
+
+        return responses.text.strip()
+
+    except Exception as e:
+        print("Gemini error:", e)
+        return f"[ERROR] Gemini failed: {str(e)}"
