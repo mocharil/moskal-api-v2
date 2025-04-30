@@ -68,15 +68,21 @@ def call_gemini(prompt, model_name=DEFAULT_MODEL):
     # Get the model instance (from cache if available)
     model = get_model(model_name)
     
+    print(model)
+    print(project_id)
+    print(credentials_file_path)
     # Generate content using the model
     responses = model.generate_content([prompt],
                                       safety_settings=safety_config,
                                       generation_config=config,
                                       stream=True)
     
+    print('----------------------- RESPONSE ----------------------')
+    print(type(responses))
     # Collect the full result
     full_result = ''
     for response in responses:
         full_result += response.text
     
+    print(full_result)
     return full_result.strip()

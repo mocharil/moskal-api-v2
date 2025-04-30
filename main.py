@@ -3,7 +3,7 @@ from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware  # Import CORS middleware
-
+from utils.gemini import call_gemini
 
 from utils.analysis_overview import get_social_media_matrix
 from utils.analysis_sentiment_mentions import get_category_analytics
@@ -835,3 +835,26 @@ def kol_overview_analysis(
     - project_name: Nama project
     """
     return search_kol(**params.dict())
+
+
+
+@app.post("/api/v2/test", tags=["TESTING"])
+def testing(
+    params: KolOverviewRequest = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example for KOL overview",
+                "value": {
+                    **example_json,
+                    "owner_id": "5",
+                    "project_name": "gibran raka"
+                }
+            }
+        }
+    )
+):
+    hasil = call_gemini('hi')
+    print(hasil)
+    return hasil
