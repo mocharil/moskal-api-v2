@@ -20,6 +20,8 @@ def create_link_user(df):
         return f"""https://www.tiktok.com/@{df['username'].strip('@ ')}"""
     if df['channel']=='linkedin':
         return f"""https://www.linkedin.com/in/{df['username'].strip('@ ')}"""
+    if df['channel']=='reddit':
+        return f"""https://www.reddit.com/{df['username'].strip('@ ')}"""
     
     
     return df['username']
