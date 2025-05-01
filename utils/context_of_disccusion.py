@@ -173,7 +173,7 @@ def get_context_of_discussion(
     }
     
     # Dapatkan indeks yang akan di-query
-    indices = [channel_to_index[ch] for ch in selected_channels if ch in channel_to_index]
+    indices = [f"{ch}_data" for ch in selected_channels]
     
     if not indices:
         print("Error: No valid indices")

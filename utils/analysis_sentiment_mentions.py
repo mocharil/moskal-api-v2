@@ -312,14 +312,7 @@ def get_category_analytics(
     
     try:
         # Dapatkan indeks yang akan di-query berdasarkan channels yang disediakan
-        available_indices = []
-        for channel in all_channels:
-            if channel in channel_to_index:
-                available_indices.append(channel_to_index[channel])
-        
-        if not available_indices:
-            print("Error: Tidak ada indeks yang valid")
-            return {}, {}, {}
+        available_indices = [f"{channel}_data" for channel in all_channels]
         
         # Query untuk kategori
         category_query = build_category_query()

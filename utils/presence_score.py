@@ -122,34 +122,10 @@ def get_presence_score(
     
     # Gunakan channels yang disediakan, jika tidak ada gunakan default
     all_channels = channels if channels else default_channels
-    
-    # Mapping channel ke index Elasticsearch
-    channel_to_index = {
-        "twitter": "twitter_data",
-        "instagram": "instagram_data",
-        "linkedin": "linkedin_data",
-        "reddit": "reddit_data",
-        "youtube": "youtube_data",
-        "tiktok": "tiktok_data",
-        "news": "news_data",
-        "blogs": "blogs_data",
-        "facebook": "facebook_data",
-        "podcasts": "podcasts_data",
-        "videos": "videos_data",
-        "web": "web_data",
-        "other_socials": "other_socials_data"
-    }
-    
+  
     # Dapatkan indeks berdasarkan channels
-    available_indices = []
-    for channel in all_channels:
-        if channel in channel_to_index:
-            available_indices.append(channel_to_index[channel])
-    
-    if not available_indices:
-        print("Error: Tidak ada indeks yang valid")
-        return {}
-    
+    available_indices = [f'{ch}_data' for ch in all_channels]
+
     # Dapatkan rentang tanggal jika tidak disediakan
     if not start_date or not end_date:
         start_date, end_date = get_date_range(

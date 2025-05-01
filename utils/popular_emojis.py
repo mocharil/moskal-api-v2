@@ -201,24 +201,9 @@ def get_popular_emojis(
     else:
         selected_channels = default_channels
     
-    # Mapping channel ke index Elasticsearch
-    channel_to_index = {
-        "twitter": "twitter_data",
-        "instagram": "instagram_data",
-        "linkedin": "linkedin_data",
-        "reddit": "reddit_data",
-        "youtube": "youtube_data",
-        "tiktok": "tiktok_data",
-        "news": "news_data",
-        "blogs": "blogs_data",
-        "facebook": "facebook_data",
-        "podcasts": "podcasts_data",
-        "videos": "videos_data",
-        "web": "web_data"
-    }
-    
+
     # Dapatkan indeks yang akan di-query
-    indices = [channel_to_index[ch] for ch in selected_channels if ch in channel_to_index]
+    indices = [f"{ch}_data" for ch in selected_channels]
     
     if not indices:
         print("Error: No valid indices")

@@ -36,7 +36,7 @@ def get_indices_from_channels(channels=None):
     }
     
     if channels:
-        indices = [index_mapping[ch] for ch in channels if ch in index_mapping]
+        indices = [f'{ch}_data' for ch in channels]
     else:
         indices = list(index_mapping.values())
     

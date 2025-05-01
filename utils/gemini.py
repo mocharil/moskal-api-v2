@@ -78,5 +78,4 @@ def call_gemini(prompt, model_name=DEFAULT_MODEL):
     for response in responses:
         full_result += response.text
     
-    print(full_result)
     return full_result.strip()
