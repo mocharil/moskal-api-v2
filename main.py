@@ -836,25 +836,3 @@ def kol_overview_analysis(
     """
     return search_kol(**params.dict())
 
-
-
-@app.post("/api/v2/test", tags=["TESTING"])
-def testing(
-    params: KolOverviewRequest = Body(
-        ...,
-        examples={
-            "normal": {
-                "summary": "Standard example",
-                "description": "A standard example for KOL overview",
-                "value": {
-                    **example_json,
-                    "owner_id": "5",
-                    "project_name": "gibran raka"
-                }
-            }
-        }
-    )
-):
-    hasil = call_gemini('hi')
-    print(hasil)
-    return hasil

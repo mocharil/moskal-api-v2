@@ -318,6 +318,12 @@ def get_most_followers(
                                 "sum": {
                                     "field": "reach_score"
                                 }
+                            },
+                            "top_hits": {
+                                "top_hits": {
+                                    "size": 1,
+                                    "_source": ["user_image_url"]
+                                }
                             }
                         }
                     }
@@ -362,13 +368,26 @@ def get_most_followers(
                 influence_score = username_bucket["influence_score"]["value"] or 0
                 reach = username_bucket["total_reach"]["value"]
                 
+                # Ambil user_image_url dari top_hits
+                user_image_url = None
+                if "top_hits" in username_bucket and username_bucket["top_hits"]["hits"]["hits"]:
+                    hit = username_bucket["top_hits"]["hits"]["hits"][0]
+                    if "_source" in hit and "user_image_url" in hit["_source"]:
+                        user_image_url = hit["_source"]["user_image_url"]
+                
+                # Buat fallback user_image_url untuk channel news jika tidak ada
+                if channel == "news" and not user_image_url:
+                    domain_name = username.replace("www.", "")
+                    user_image_url = f"https://logo.clearbit.com/{domain_name}"
+                
                 followers_data.append({
                     "channel": channel,
                     "username": username,
                     "followers": followers or connections or subscribers or 0,
                     "influence_score": influence_score,
                     "total_mentions": mentions,
-                    "total_reach": reach
+                    "total_reach": reach,
+                    "user_image_url": user_image_url
                 })
         
         # Sortir berdasarkan jumlah followers
