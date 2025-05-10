@@ -52,7 +52,7 @@ def influence_score_social(platform, metrics):
 
     # Case khusus: Instagram
     if platform == "instagram":
-        if "views" in metrics:
+        if "views" in metrics and 'reel' in metrics['link_post']:
             setting = {
                 "engagement": {"likes": 0.5, "comments": 0.3},
                 "reach": {"views": 0.2}
