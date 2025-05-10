@@ -331,9 +331,52 @@ def get_mentions(
         
         # Tambahkan pengurutan jika bukan relevant sort
         if sort_field:
-            query["sort"] = [
-                {sort_field: {"order": sort_order}}
-            ]
+            if sort_field == "viral_score":
+                query["sort"] = [
+                     {
+                    "_script": {
+                        "type": "number",
+                        "script": {
+                        "lang": "painless",
+                        "source": """
+                            double likes = doc.containsKey('likes') && !doc['likes'].empty ? doc['likes'].value : 0;
+                            double comments = doc.containsKey('comments') && !doc['comments'].empty ? doc['comments'].value : 0;
+                            double shares = doc.containsKey('shares') && !doc['shares'].empty ? doc['shares'].value : 0;
+                            double retweets = doc.containsKey('retweets') && !doc['retweets'].empty ? doc['retweets'].value : 0;
+                            double replies = doc.containsKey('replies') && !doc['replies'].empty ? doc['replies'].value : 0;
+                            double reposts = doc.containsKey('reposts') && !doc['reposts'].empty ? doc['reposts'].value : 0;
+                            double votes = doc.containsKey('votes') && !doc['votes'].empty ? doc['votes'].value : 0;
+                            double favorites = doc.containsKey('favorites') && !doc['favorites'].empty ? doc['favorites'].value : 0;
+                            double views = doc.containsKey('views') && !doc['views'].empty ? doc['views'].value : 0;
+                            String channel = doc.containsKey('channel') && !doc['channel'].empty ? doc['channel'].value : "";
+                            double score = 0;
+
+                            if (channel == 'twitter') {
+                            score = (likes * 1 + replies * 2 + retweets * 3) / (views > 0 ? views : 1);
+                            } else if (channel == 'linkedin') {
+                            score = (likes * 1 + comments * 2 + reposts * 3) / 1000; // anggap 1k reach
+                            } else if (channel == 'tiktok') {
+                            score = (likes * 1 + comments * 2 + shares * 3 + favorites * 1) / (views > 0 ? views : 1);
+                            } else if (channel == 'instagram') {
+                            score = (likes * 1 + comments * 2) / (views > 0 ? views : 1000);
+                            } else if (channel == 'reddit') {
+                            score = (votes * 1 + comments * 2) / 1000;
+                            } else if (channel == 'youtube') {
+                            score = (likes * 1 + comments * 2) / (views > 0 ? views : 1);
+                            }
+
+                            return score;
+                        """
+                        },
+                        "order": sort_order
+                            }
+                    }
+                ]
+
+            else:
+                query["sort"] = [
+                    {sort_field: {"order": sort_order}}
+                ]
     
     # Tambahkan source parameter ke query jika disediakan
     if source is not None:
@@ -359,7 +402,6 @@ def get_mentions(
     }
     query["query"]["bool"]["filter"].append(mention_filter)
 
-    print(query)
     # Jalankan query
     try:
         response = es.search(
@@ -369,7 +411,7 @@ def get_mentions(
         
         # Dapatkan posts
         posts = [hit["_source"] for hit in response["hits"]["hits"]]
-
+  
         for i in posts:
             if i['channel'] == 'news':
                 if 'username' not in i:
@@ -379,6 +421,9 @@ def get_mentions(
                 if 'user_image_url' not in i:
                     i.update({"user_image_url":f"https://logo.clearbit.com/{i['username']}"})
 
+        from utils.influence_score import get_influence_score
+        for i in posts:
+            i.update({'influence_score':get_influence_score(i)})
 
         # Dapatkan total posts
         total_posts = response["hits"]["total"]["value"]

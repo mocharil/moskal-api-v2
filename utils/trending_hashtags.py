@@ -14,6 +14,9 @@ from typing import Dict, List, Literal, Optional, Union
 from utils.es_client import get_elasticsearch_client
 from utils.es_query_builder import get_date_range
 
+# Define blacklisted words for filtering hashtags
+BLACKLISTED_WORDS = {'fyp', 'capcut', 'viral'}
+
 def get_trending_hashtags(
     es_host=None,
     es_username=None,
@@ -369,6 +372,12 @@ def get_trending_hashtags(
         
         for hashtag_bucket in hashtag_buckets:
             hashtag = hashtag_bucket["key"]
+            
+            # Skip hashtags yang mengandung kata-kata yang di-blacklist
+            hashtag_lower = hashtag.lower()
+            if any(word in hashtag_lower for word in BLACKLISTED_WORDS):
+                continue
+                
             mentions = hashtag_bucket["doc_count"]
             
             # Analisis sentimen untuk hashtag

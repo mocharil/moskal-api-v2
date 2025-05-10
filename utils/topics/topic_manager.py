@@ -210,7 +210,7 @@ def topic_existing_data(
             ).drop('index', axis=1)
             is_ingest = True
         except Exception as e:
-            print('---->',e)
+           
             df_undone = pd.DataFrame()
 
     else:

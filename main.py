@@ -1,3 +1,4 @@
+print('preparing..')
 from fastapi import FastAPI, Body
 from typing import Optional, List
 from datetime import datetime
