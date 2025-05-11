@@ -66,7 +66,7 @@ def get_keyword_trends(
     # Try to get from cache first
     cached_result = redis_client.get(cache_key)
     if cached_result is not None:
-        logger.info('Returning cached result')
+        print('Returning cached result')
         return cached_result
 
     # Buat koneksi Elasticsearch
