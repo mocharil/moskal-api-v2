@@ -1,11 +1,3 @@
-"""
-trending_links.py - Script untuk mendapatkan trending links dari data Elasticsearch
-
-Script ini menganalisis data dari Elasticsearch untuk menentukan link/URL
-yang paling sering muncul, dengan normalisasi URL untuk mengelompokkan URL
-dari situs yang sama dengan struktur yang serupa.
-"""
-
 import json
 from datetime import datetime
 from typing import Dict, List, Literal, Optional, Union
@@ -13,23 +5,10 @@ from typing import Dict, List, Literal, Optional, Union
 # Import utilitas dari paket utils
 from utils.es_client import get_elasticsearch_client
 from utils.es_query_builder import get_date_range
+from utils.redis_client import redis_client
 
 def normalize_link(link, channel):
-    """
-    Normalize a link based on channel and URL structure
-    
-    Parameters:
-    -----------
-    link : str
-        Original link URL
-    channel : str
-        Channel name (e.g., 'twitter', 'youtube', etc.)
-        
-    Returns:
-    --------
-    str
-        Normalized link URL
-    """
+ 
     if not link or not isinstance(link, str):
         return link
     
@@ -92,87 +71,44 @@ def get_trending_links(
     page=1,          # Current page number
     page_size=10     # Number of items per page
 ) -> Dict:
-    """
-    Mendapatkan daftar trending links dengan dukungan pagination
     
-    Parameters:
-    -----------
-    es_host : str
-        Host Elasticsearch
-    es_username : str, optional
-        Username Elasticsearch
-    es_password : str, optional
-        Password Elasticsearch
-    use_ssl : bool, optional
-        Gunakan SSL untuk koneksi
-    verify_certs : bool, optional
-        Verifikasi sertifikat SSL
-    ca_certs : str, optional
-        Path ke sertifikat CA
-    keywords : list, optional
-        Daftar keyword untuk filter
-    search_exact_phrases : bool, optional
-        Jika True, gunakan match_phrase untuk pencarian keyword, jika False gunakan match AND
-    case_sensitive : bool, optional
-        Jika True, pencarian keyword bersifat case-sensitive, jika False tidak memperhatikan huruf besar/kecil
-    sentiment : list, optional
-        Daftar sentiment ['positive', 'negative', 'neutral']
-    start_date : str, optional
-        Tanggal awal format YYYY-MM-DD
-    end_date : str, optional
-        Tanggal akhir format YYYY-MM-DD
-    date_filter : str, optional
-        Filter tanggal untuk digunakan jika start_date dan end_date tidak disediakan
-    custom_start_date : str, optional
-        Tanggal awal kustom jika date_filter adalah "custom"
-    custom_end_date : str, optional
-        Tanggal akhir kustom jika date_filter adalah "custom"
-    channels : list, optional
-        Daftar channel ['twitter', 'news', 'instagram', dll]
-    importance : str, optional
-        'important mentions' atau 'all mentions'
-    influence_score_min : float, optional
-        Skor pengaruh minimum (0-100)
-    influence_score_max : float, optional
-        Skor pengaruh maksimum (0-100)
-    region : list, optional
-        Daftar region
-    language : list, optional
-        Daftar bahasa
-    domain : list, optional
-        Daftar domain untuk filter
-    limit : int, optional
-        Jumlah total link yang akan dianalisis dari Elasticsearch
-    page : int, optional
-        Nomor halaman saat ini (dimulai dari 1)
-    page_size : int, optional
-        Jumlah item per halaman
-        
-    Returns:
-    --------
-    Dict
-        Dictionary berisi daftar trending links dengan informasi pagination:
-        {
-            "data": [
-                {
-                    "link_post": "https://example.com/page",
-                    "total_mentions": 346
-                },
-                ...
-            ],
-            "pagination": {
-                "page": 1,
-                "page_size": 10,
-                "total_pages": 5,
-                "total_items": 42
-            },
-            "channels": ["twitter", "instagram", ...],
-            "period": {
-                "start_date": "2025-01-01",
-                "end_date": "2025-04-30"
-            }
-        }
-    """
+    # Generate cache key based on all parameters
+    cache_key = redis_client.generate_cache_key(
+        "get_trending_links",
+        es_host=None,
+        es_username=None,
+        es_password=None,
+        use_ssl=False,
+        verify_certs=False,
+        ca_certs=None,
+        keywords=None,
+        search_exact_phrases=False,
+        case_sensitive=False,
+        sentiment=None,
+        start_date=None,
+        end_date=None,
+        date_filter="last 30 days",
+        custom_start_date=None,
+        custom_end_date=None,
+        channels=None,
+        importance="all mentions",
+        influence_score_min=None,
+        influence_score_max=None,
+        region=None,
+        language=None,
+        domain=None,
+        limit=10000,       # Total links to analyze
+        page=1,          # Current page number
+        page_size=10     # Number of items per page
+
+    )
+
+    # Try to get from cache first
+    cached_result = redis_client.get(cache_key)
+    if cached_result is not None:
+        print('Returning cached result')
+        return cached_result
+
     # Buat koneksi Elasticsearch
     es = get_elasticsearch_client(
         es_host=es_host,
@@ -550,7 +486,7 @@ def get_trending_links(
                 "end_date": end_date
             }
         }
-        
+        redis_client.set_with_ttl(cache_key, result, ttl_seconds=100)
         return result
         
     except Exception as e:

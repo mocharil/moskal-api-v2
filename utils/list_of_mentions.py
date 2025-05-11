@@ -1,10 +1,3 @@
-"""
-list_of_mentions.py - Script untuk mengambil daftar mentions dari Elasticsearch
-
-Script ini mengambil daftar mentions/posts dari berbagai platform
-media sosial dengan dukungan pagination dan berbagai opsi sorting.
-"""
-
 import argparse
 import json
 import re
@@ -19,6 +12,7 @@ from utils.es_query_builder import (
     get_indices_from_channels,
     get_date_range
 )
+from utils.redis_client import redis_client
 
 def get_mentions(
     es_host=None,
@@ -49,80 +43,44 @@ def get_mentions(
     page_size=10,
     source=None  # Parameter baru untuk memilih field yang akan diambil
 ):
-    """
-    Mengambil daftar mentions/posts dari Elasticsearch dengan pagination
-    
-    Parameters:
-    -----------
-    es_host : str
-        Host Elasticsearch
-    es_username : str, optional
-        Username Elasticsearch
-    es_password : str, optional
-        Password Elasticsearch
-    use_ssl : bool, optional
-        Gunakan SSL untuk koneksi
-    verify_certs : bool, optional
-        Verifikasi sertifikat SSL
-    ca_certs : str, optional
-        Path ke sertifikat CA
-    keywords : list, optional
-        Daftar keyword untuk filter
-    search_exact_phrases : bool, optional
-        Jika True, gunakan match_phrase untuk pencarian keyword, jika False gunakan match AND
-    case_sensitive : bool, optional
-        Jika True, pencarian keyword bersifat case-sensitive, jika False tidak memperhatikan huruf besar/kecil
-    sentiment : list, optional
-        Daftar sentiment ['positive', 'negative', 'neutral']
-    start_date : str, optional
-        Tanggal awal format YYYY-MM-DD
-    end_date : str, optional
-        Tanggal akhir format YYYY-MM-DD
-    date_filter : str, optional
-        Filter tanggal untuk digunakan jika start_date dan end_date tidak disediakan
-    custom_start_date : str, optional
-        Tanggal awal kustom jika date_filter adalah "custom"
-    custom_end_date : str, optional
-        Tanggal akhir kustom jika date_filter adalah "custom"
-    channels : list, optional
-        Daftar channel ['twitter', 'news', 'instagram', dll]
-    importance : str, optional
-        'important mentions' atau 'all mentions'
-    influence_score_min : float, optional
-        Skor pengaruh minimum (0-100)
-    influence_score_max : float, optional
-        Skor pengaruh maksimum (0-100)
-    region : list, optional
-        Daftar region
-    language : list, optional
-        Daftar bahasa
-    domain : list, optional
-        Daftar domain untuk filter
-    sort_type : str, optional
-        Tipe pengurutan ('popular', 'recent', atau 'relevant')
-    sort_order : str, optional
-        Urutan pengurutan ('asc' atau 'desc')
-    page : int, optional
-        Nomor halaman (dimulai dari 1)
-    page_size : int, optional
-        Jumlah post per halaman
-    source : list or str, optional
-        Field yang akan diambil dari Elasticsearch, jika None akan mengambil semua field
-        
-    Returns:
-    --------
-    dict
-        Dictionary berisi posts dan informasi pagination:
-        {
-            'posts': [...],  # Daftar post
-            'pagination': {
-                'page': 1,  # Halaman saat ini
-                'page_size': 10,  # Jumlah post per halaman
-                'total_pages': 5,  # Total halaman
-                'total_posts': 45  # Total post
-            }
-        }
-    """
+    # Generate cache key based on all parameters
+    cache_key = redis_client.generate_cache_key(
+        "list_of_mentions",
+        es_host=es_host,
+        es_username=es_username,
+        es_password=es_password,
+        use_ssl=use_ssl,
+        verify_certs=verify_certs,
+        ca_certs=ca_certs,
+        keywords=keywords,
+        search_exact_phrases=search_exact_phrases,
+        case_sensitive=case_sensitive,
+        sentiment=sentiment,
+        start_date=start_date,
+        end_date=end_date,
+        date_filter=date_filter,
+        custom_start_date=custom_start_date,
+        custom_end_date=custom_end_date,
+        channels=channels,
+        importance=importance,
+        influence_score_min=influence_score_min,
+        influence_score_max=influence_score_max,
+        region=region,
+        language=language,
+        domain=domain,
+        sort_type=sort_type,
+        sort_order=sort_order,
+        page=page,
+        page_size=page_size,
+        source=source
+    )
+
+    # Try to get from cache first
+    cached_result = redis_client.get(cache_key)
+    if cached_result is not None:
+        print('Returning cached result')
+        return cached_result
+
     # Buat koneksi Elasticsearch
     es = get_elasticsearch_client(
         es_host=es_host,
@@ -480,10 +438,14 @@ def get_mentions(
             'total_posts': total_posts
         }
         
-        return {
+        result = {
             'data': posts,
             'pagination': pagination
         }
+        
+        # Cache the results for 10 minutes
+        redis_client.set_with_ttl(cache_key, result, ttl_seconds=100)
+        return result
         
     except Exception as e:
         print(f"Error querying Elasticsearch: {e}")

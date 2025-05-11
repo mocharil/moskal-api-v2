@@ -1,10 +1,3 @@
-"""
-keyword_trends.py - Script untuk mendapatkan tren keyword dari data Elasticsearch
-
-Script ini menganalisis data dari Elasticsearch untuk mendapatkan tren keyword
-berdasarkan waktu, termasuk sentimen dan metrik terkait.
-"""
-
 from datetime import datetime
 from typing import Dict, List, Literal, Optional, Union
 
@@ -16,6 +9,7 @@ from utils.es_query_builder import (
     build_elasticsearch_query,
     add_time_series_aggregation
 )
+from utils.redis_client import redis_client
 
 def get_keyword_trends(
     es_host=None,
@@ -41,72 +35,40 @@ def get_keyword_trends(
     language=None,
     domain=None
 ):
-    """
-    Mendapatkan tren keyword dari Elasticsearch
-    
-    Parameters:
-    -----------
-    es_host : str
-        Host Elasticsearch
-    es_username : str, optional
-        Username Elasticsearch
-    es_password : str, optional
-        Password Elasticsearch
-    use_ssl : bool, optional
-        Gunakan SSL untuk koneksi
-    verify_certs : bool, optional
-        Verifikasi sertifikat SSL
-    ca_certs : str, optional
-        Path ke sertifikat CA
-    keywords : list, optional
-        Daftar keyword untuk filter
-    search_exact_phrases : bool, optional
-        Jika True, gunakan match_phrase untuk pencarian keyword, jika False gunakan match AND
-    case_sensitive : bool, optional
-        Jika True, pencarian keyword bersifat case-sensitive, jika False tidak memperhatikan huruf besar/kecil
-    sentiment : list, optional
-        Daftar sentiment ['positive', 'negative', 'neutral']
-    start_date : str, optional
-        Tanggal awal format YYYY-MM-DD
-    end_date : str, optional
-        Tanggal akhir format YYYY-MM-DD
-    date_filter : str, optional
-        Filter tanggal untuk digunakan jika start_date dan end_date tidak disediakan
-    custom_start_date : str, optional
-        Tanggal awal kustom jika date_filter adalah "custom"
-    custom_end_date : str, optional
-        Tanggal akhir kustom jika date_filter adalah "custom"
-    channels : list, optional
-        Daftar channel ['twitter', 'news', 'instagram', dll]
-    importance : str, optional
-        'important mentions' atau 'all mentions'
-    influence_score_min : float, optional
-        Skor pengaruh minimum (0-100)
-    influence_score_max : float, optional
-        Skor pengaruh maksimum (0-100)
-    region : list, optional
-        Daftar region
-    language : list, optional
-        Daftar bahasa
-    domain : list, optional
-        Daftar domain untuk filter
-        
-    Returns:
-    --------
-    list
-        List metrik sosial media berdasarkan tanggal:
-        [
-            {
-                'post_date': '2025-02-01 00:00:00',
-                'total_mentions': 123,
-                'total_reach': 45678.9,
-                'total_positive': 78,
-                'total_negative': 12,
-                'total_neutral': 33
-            },
-            ...
-        ]
-    """
+ 
+    # Generate cache key based on all parameters
+    cache_key = redis_client.generate_cache_key(
+        "keyword_trends",
+        es_host=es_host,
+        es_username=es_username,
+        es_password=es_password,
+        use_ssl=use_ssl,
+        verify_certs=verify_certs,
+        ca_certs=ca_certs,
+        keywords=keywords,
+        search_exact_phrases=search_exact_phrases,
+        case_sensitive=case_sensitive,
+        sentiment=sentiment,
+        start_date=start_date,
+        end_date=end_date,
+        date_filter=date_filter,
+        custom_start_date=custom_start_date,
+        custom_end_date=custom_end_date,
+        channels=channels,
+        importance=importance,
+        influence_score_min=influence_score_min,
+        influence_score_max=influence_score_max,
+        region=region,
+        language=language,
+        domain=domain
+    )
+
+    # Try to get from cache first
+    cached_result = redis_client.get(cache_key)
+    if cached_result is not None:
+        logger.info('Returning cached result')
+        return cached_result
+
     # Buat koneksi Elasticsearch
     es = get_elasticsearch_client(
         es_host=es_host,
@@ -285,26 +247,18 @@ def get_keyword_trends(
         )
         
         # Process results
-        return process_time_series_results(response)
+        result = process_time_series_results(response)
+        
+        # Cache the results for 10 minutes (silently fails if Redis is down)
+        redis_client.set_with_ttl(cache_key, result, ttl_seconds=600)
+        return result
         
     except Exception as e:
         print(f"Error querying Elasticsearch: {e}")
         return []
 
 def process_time_series_results(response):
-    """
-    Process time series aggregation results
-    
-    Parameters:
-    -----------
-    response : dict
-        Elasticsearch response containing time_series aggregation
-        
-    Returns:
-    --------
-    list
-        List of processed time series data
-    """
+
     results = []
     
     try:

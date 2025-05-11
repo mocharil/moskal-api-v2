@@ -13,7 +13,7 @@ from typing import Dict, List, Literal, Optional, Union
 # Import utilitas dari paket utils
 from utils.es_client import get_elasticsearch_client
 from utils.es_query_builder import get_date_range
-
+from utils.redis_client import redis_client
 def get_stats_summary(
     es_host=None,
     es_username=None,
@@ -39,74 +39,40 @@ def get_stats_summary(
     domain=None,
     compare_with_previous=True  # Compare with previous period
 ) -> Dict:
-    """
-    Mendapatkan ringkasan statistik dengan pertumbuhan dibandingkan periode sebelumnya
-    
-    Parameters:
-    -----------
-    es_host : str
-        Host Elasticsearch
-    es_username : str, optional
-        Username Elasticsearch
-    es_password : str, optional
-        Password Elasticsearch
-    use_ssl : bool, optional
-        Gunakan SSL untuk koneksi
-    verify_certs : bool, optional
-        Verifikasi sertifikat SSL
-    ca_certs : str, optional
-        Path ke sertifikat CA
-    keywords : list, optional
-        Daftar keyword untuk filter
-    search_exact_phrases : bool, optional
-        Jika True, gunakan match_phrase untuk pencarian keyword, jika False gunakan match AND
-    case_sensitive : bool, optional
-        Jika True, pencarian keyword bersifat case-sensitive, jika False tidak memperhatikan huruf besar/kecil
-    sentiment : list, optional
-        Daftar sentiment ['positive', 'negative', 'neutral']
-    start_date : str, optional
-        Tanggal awal format YYYY-MM-DD
-    end_date : str, optional
-        Tanggal akhir format YYYY-MM-DD
-    date_filter : str, optional
-        Filter tanggal untuk digunakan jika start_date dan end_date tidak disediakan
-    custom_start_date : str, optional
-        Tanggal awal kustom jika date_filter adalah "custom"
-    custom_end_date : str, optional
-        Tanggal akhir kustom jika date_filter adalah "custom"
-    channels : list, optional
-        Daftar channel ['twitter', 'news', 'instagram', dll]
-    importance : str, optional
-        'important mentions' atau 'all mentions'
-    influence_score_min : float, optional
-        Skor pengaruh minimum (0-100)
-    influence_score_max : float, optional
-        Skor pengaruh maksimum (0-100)
-    region : list, optional
-        Daftar region
-    language : list, optional
-        Daftar bahasa
-    domain : list, optional
-        Daftar domain untuk filter
-    compare_with_previous : bool, optional
-        Bandingkan dengan periode sebelumnya untuk menghitung growth
-        
-    Returns:
-    --------
-    Dict
-        Dictionary berisi statistik dan pertumbuhan:
-        {
-            "non_social_mentions": {
-                "value": 12000,
-                "display": "12K",
-                "growth": 4800,
-                "growth_display": "+4.8K",
-                "growth_percentage": 2118,
-                "growth_percentage_display": "+2118%"
-            },
-            ...
-        }
-    """
+
+    cache_key = redis_client.generate_cache_key(
+        "get_stats_summary",
+        es_host=None,
+        es_username=None,
+        es_password=None,
+        use_ssl=False,
+        verify_certs=False,
+        ca_certs=None,
+        keywords=None,
+        search_exact_phrases=False,
+        case_sensitive=False,
+        sentiment=None,
+        start_date=None,
+        end_date=None,
+        date_filter="last 30 days",
+        custom_start_date=None,
+        custom_end_date=None,
+        channels=None,
+        importance="all mentions",
+        influence_score_min=None,
+        influence_score_max=None,
+        region=None,
+        language=None,
+        domain=None,
+        compare_with_previous=True
+    )
+
+    # Try to get from cache first
+    cached_result = redis_client.get(cache_key)
+    if cached_result is not None:
+        print('Returning cached result')
+        return cached_result
+
     # Buat koneksi Elasticsearch
     es = get_elasticsearch_client(
         es_host=es_host,
@@ -593,7 +559,7 @@ def get_stats_summary(
                 "social_media_likes": []    # Would need additional aggregation for this
             }
         }
-        
+        redis_client.set_with_ttl(cache_key, result, ttl_seconds=100)
         return result
         
     except Exception as e:

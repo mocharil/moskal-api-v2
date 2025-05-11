@@ -1,11 +1,3 @@
-"""
-trending_hashtags.py - Script untuk mendapatkan trending hashtags dari data Elasticsearch
-
-Script ini menganalisis data dari Elasticsearch untuk menentukan hashtag
-yang sedang trending, termasuk analisis sentimen dominan untuk setiap hashtag.
-Mendukung pagination untuk memudahkan navigasi hasil.
-"""
-
 import json
 from datetime import datetime
 from typing import Dict, List, Literal, Optional, Union
@@ -13,7 +5,7 @@ from typing import Dict, List, Literal, Optional, Union
 # Import utilitas dari paket utils
 from utils.es_client import get_elasticsearch_client
 from utils.es_query_builder import get_date_range
-
+from utils.redis_client import redis_client
 # Define blacklisted words for filtering hashtags
 BLACKLISTED_WORDS = {'fyp', 'capcut', 'viral'}
 
@@ -45,89 +37,43 @@ def get_trending_hashtags(
     page_size=10,    # Number of items per page
     sort_by="mentions"  # Sort criteria: "mentions" or "sentiment_percentage"
 ) -> Dict:
-    """
-    Mendapatkan daftar trending hashtags dengan sentimen dominan, dengan dukungan pagination
-    
-    Parameters:
-    -----------
-    es_host : str
-        Host Elasticsearch
-    es_username : str, optional
-        Username Elasticsearch
-    es_password : str, optional
-        Password Elasticsearch
-    use_ssl : bool, optional
-        Gunakan SSL untuk koneksi
-    verify_certs : bool, optional
-        Verifikasi sertifikat SSL
-    ca_certs : str, optional
-        Path ke sertifikat CA
-    keywords : list, optional
-        Daftar keyword untuk filter
-    search_exact_phrases : bool, optional
-        Jika True, gunakan match_phrase untuk pencarian keyword, jika False gunakan match AND
-    case_sensitive : bool, optional
-        Jika True, pencarian keyword bersifat case-sensitive, jika False tidak memperhatikan huruf besar/kecil
-    sentiment : list, optional
-        Daftar sentiment ['positive', 'negative', 'neutral']
-    start_date : str, optional
-        Tanggal awal format YYYY-MM-DD
-    end_date : str, optional
-        Tanggal akhir format YYYY-MM-DD
-    date_filter : str, optional
-        Filter tanggal untuk digunakan jika start_date dan end_date tidak disediakan
-    custom_start_date : str, optional
-        Tanggal awal kustom jika date_filter adalah "custom"
-    custom_end_date : str, optional
-        Tanggal akhir kustom jika date_filter adalah "custom"
-    channels : list, optional
-        Daftar channel ['twitter', 'news', 'instagram', dll]
-    importance : str, optional
-        'important mentions' atau 'all mentions'
-    influence_score_min : float, optional
-        Skor pengaruh minimum (0-100)
-    influence_score_max : float, optional
-        Skor pengaruh maksimum (0-100)
-    region : list, optional
-        Daftar region
-    language : list, optional
-        Daftar bahasa
-    domain : list, optional
-        Daftar domain untuk filter
-    limit : int, optional
-        Jumlah total hashtag yang akan dianalisis dari Elasticsearch
-    page : int, optional
-        Nomor halaman saat ini (dimulai dari 1)
-    page_size : int, optional
-        Jumlah item per halaman
-    sort_by : str, optional
-        Kriteria pengurutan: "mentions" (berdasarkan jumlah) atau "sentiment_percentage" (berdasarkan persentase sentimen dominan)
+    # Generate cache key based on all parameters
+    cache_key = redis_client.generate_cache_key(
+        "get_trending_hashtags",
+        es_host=None,
+        es_username=None,
+        es_password=None,
+        use_ssl=False,
+        verify_certs=False,
+        ca_certs=None,
+        keywords=None,
+        search_exact_phrases=False,
+        case_sensitive=False,
+        sentiment=None,
+        start_date=None,
+        end_date=None,
+        date_filter="last 30 days",
+        custom_start_date=None,
+        custom_end_date=None,
+        channels=None,
+        importance="all mentions",
+        influence_score_min=None,
+        influence_score_max=None,
+        region=None,
+        language=None,
+        domain=None,
+        limit=100,       # Total hashtags to analyze (increased for better pagination)
+        page=1,          # Current page number
+        page_size=10,    # Number of items per page
+        sort_by="mentions"  # Sort criteria: "mentions" or "sentiment_percentage"
+    )
+
+    # Try to get from cache first
+    cached_result = redis_client.get(cache_key)
+    if cached_result is not None:
+        print('Returning cached result')
+        return cached_result
         
-    Returns:
-    --------
-    Dict
-        Dictionary berisi daftar trending hashtags dengan sentimen dominan dan informasi pagination:
-        {
-            "data": [
-                {
-                    "hashtag": "#kadin",
-                    "total_mentions": 346,
-                    "dominant_sentiment": "positive",
-                    "dominant_sentiment_count": 266,
-                    "dominant_sentiment_percentage": 76.9
-                },
-                ...
-            ],
-            "pagination": {
-                "page": 1,
-                "page_size": 10,
-                "total_pages": 5,
-                "total_items": 42
-            },
-            "channels": ["twitter", "instagram", ...],
-            "total_unique_hashtags": 152
-        }
-    """
     # Buat koneksi Elasticsearch
     es = get_elasticsearch_client(
         es_host=es_host,
@@ -449,7 +395,7 @@ def get_trending_hashtags(
                 "end_date": end_date
             }
         }
-        
+        redis_client.set_with_ttl(cache_key, result, ttl_seconds=100)
         return result
         
     except Exception as e:

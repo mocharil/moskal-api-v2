@@ -7,6 +7,7 @@ from typing import Dict, List, Literal, Optional, Union
 # Import utilitas dari paket utils
 from utils.es_client import get_elasticsearch_client
 from utils.es_query_builder import get_date_range
+from utils.redis_client import redis_client
 
 def get_social_media_matrix(
     es_host=None,
@@ -33,59 +34,40 @@ def get_social_media_matrix(
     domain=None,
     compare_with_previous=True  # Menambahkan flag untuk membandingkan dengan periode sebelumnya
 ):
-    """
-    Mendapatkan matriks metrik sosial media dari Elasticsearch
-    
-    Parameters:
-    -----------
-    es_host : str
-        Host Elasticsearch
-    es_username : str, optional
-        Username Elasticsearch
-    es_password : str, optional
-        Password Elasticsearch
-    use_ssl : bool, optional
-        Gunakan SSL untuk koneksi
-    verify_certs : bool, optional
-        Verifikasi sertifikat SSL
-    ca_certs : str, optional
-        Path ke sertifikat CA
-    keywords : list, optional
-        Daftar keyword untuk filter
-    search_exact_phrases : bool, optional
-        Jika True, gunakan match_phrase untuk pencarian keyword, jika False gunakan match AND
-    case_sensitive : bool, optional
-        Jika True, pencarian keyword bersifat case-sensitive, jika False tidak memperhatikan huruf besar/kecil
-    start_date : str, optional
-        Tanggal awal format YYYY-MM-DD
-    end_date : str, optional
-        Tanggal akhir format YYYY-MM-DD
-    date_filter : str, optional
-        Filter tanggal untuk digunakan jika start_date dan end_date tidak disediakan
-    custom_start_date : str, optional
-        Tanggal awal kustom jika date_filter adalah "custom"
-    custom_end_date : str, optional
-        Tanggal akhir kustom jika date_filter adalah "custom"
-    importance : str, optional
-        'important mentions' atau 'all mentions'
-    influence_score_min : float, optional
-        Skor pengaruh minimum (0-100)
-    influence_score_max : float, optional
-        Skor pengaruh maksimum (0-100)
-    region : list, optional
-        Daftar region
-    language : list, optional
-        Daftar bahasa
-    domain : list, optional
-        Daftar domain untuk filter
-    compare_with_previous : bool, optional
-        Bandingkan dengan periode sebelumnya untuk menghitung growth
-        
-    Returns:
-    --------
-    dict
-        Dictionary berisi matriks metrik sosial media dengan informasi growth
-    """
+    # Generate cache key based on all parameters
+    cache_key = redis_client.generate_cache_key(
+        "social_media_matrix",
+        es_host=es_host,
+        es_username=es_username,
+        es_password=es_password,
+        use_ssl=use_ssl,
+        verify_certs=verify_certs,
+        ca_certs=ca_certs,
+        sentiment=sentiment,
+        keywords=keywords,
+        channels=channels,
+        search_exact_phrases=search_exact_phrases,
+        case_sensitive=case_sensitive,
+        start_date=start_date,
+        end_date=end_date,
+        date_filter=date_filter,
+        custom_start_date=custom_start_date,
+        custom_end_date=custom_end_date,
+        importance=importance,
+        influence_score_min=influence_score_min,
+        influence_score_max=influence_score_max,
+        region=region,
+        language=language,
+        domain=domain,
+        compare_with_previous=compare_with_previous
+    )
+
+    # Try to get from cache first
+    cached_result = redis_client.get(cache_key)
+    if cached_result is not None:
+        print('Returning cached result')
+        return cached_result
+
     # Buat koneksi Elasticsearch
     es = get_elasticsearch_client(
         es_host=es_host,
@@ -706,4 +688,6 @@ def get_social_media_matrix(
         } if compare_with_previous else None
     }
     
+    # Cache the results for 10 minutes
+    redis_client.set_with_ttl(cache_key, matrix, ttl_seconds=100)
     return matrix

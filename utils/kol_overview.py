@@ -5,6 +5,7 @@ import uuid, numpy as np
 from elasticsearch import Elasticsearch
 from utils.influence_score import get_influence_score
 from dotenv import load_dotenv
+from utils.redis_client import redis_client
 
 # Load environment variables
 load_dotenv()
@@ -28,16 +29,7 @@ def create_link_user(df):
     return df['username']
     
 def add_negative_driver_flag(df):
-    """
-    Add is_negative_driver column that is True when sentiment_negative 
-    is the dominant sentiment
-    
-    Args:
-        df: DataFrame with sentiment_positive, sentiment_negative, and sentiment_neutral columns
-        
-    Returns:
-        DataFrame with added is_negative_driver column
-    """
+
     # Ensure all sentiment columns exist
     for sentiment in ['positive', 'negative', 'neutral']:
         col_name = f'sentiment_{sentiment}'
@@ -94,6 +86,36 @@ def search_kol(   owner_id = None,
     region=None,
     language=None,
     domain=None):
+
+    # Generate cache key based on all parameters
+    cache_key = redis_client.generate_cache_key(
+        "kol_overview",
+        owner_id=owner_id,
+        project_name=project_name,
+        keywords=keywords,
+        search_exact_phrases=search_exact_phrases,
+        case_sensitive=case_sensitive,
+        start_date=start_date,
+        sentiment=sentiment,
+        end_date=end_date,
+        date_filter=date_filter,
+        custom_start_date=custom_start_date,
+        custom_end_date=custom_end_date,
+        channels=channels,
+        importance=importance,
+        influence_score_min=influence_score_min,
+        influence_score_max=influence_score_max,
+        region=region,
+        language=language,
+        domain=domain
+    )
+
+    # Try to get from cache first
+    cached_result = redis_client.get(cache_key)
+    if cached_result is not None:
+        print('Returning cached result')
+        return cached_result
+
 
     print('get all data mentions')
 
@@ -242,6 +264,8 @@ def search_kol(   owner_id = None,
         final_kol = pd.concat([most_negative_kol,most_viral_kol]).drop_duplicates('link_user')
 
 
-        return final_kol.sort_values(['is_negative_driver','sentiment_negative','most_viral'], ascending = False)[:150].to_dict(orient = 'records')
+        result = final_kol.sort_values(['is_negative_driver','sentiment_negative','most_viral'], ascending = False)[:150].to_dict(orient = 'records')
         
-        
+        # Cache the results for 10 minutes
+        redis_client.set_with_ttl(cache_key, result, ttl_seconds=600)
+        return result

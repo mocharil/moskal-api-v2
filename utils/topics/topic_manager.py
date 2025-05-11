@@ -1,6 +1,7 @@
 import pandas as pd
 from typing import List, Dict, Any, Optional
 from elasticsearch import Elasticsearch
+from utils.redis_client import redis_client
 from .es_operations import upsert_documents
 from .topic_analyzer import (
     get_data_topics,
@@ -278,6 +279,35 @@ def topic_overviews(
     language: Optional[str] = None,
     domain: Optional[str] = None
 ) -> List[Dict]:
+    # Generate cache key based on all parameters
+    cache_key = redis_client.generate_cache_key(
+        "topics_overview",
+        owner_id=owner_id,
+        project_name=project_name,
+        keywords=keywords,
+        search_exact_phrases=search_exact_phrases,
+        case_sensitive=case_sensitive,
+        start_date=start_date,
+        sentiment=sentiment,
+        end_date=end_date,
+        date_filter=date_filter,
+        custom_start_date=custom_start_date,
+        custom_end_date=custom_end_date,
+        channels=channels,
+        importance=importance,
+        influence_score_min=influence_score_min,
+        influence_score_max=influence_score_max,
+        region=region,
+        language=language,
+        domain=domain
+    )
+
+    # Try to get from cache first
+    cached_result = redis_client.get(cache_key)
+    if cached_result is not None:
+        print('Returning cached result')
+        return cached_result
+
     """Main entry point for topic overview analysis"""
     if es is None:
         es = get_elasticsearch_client()
@@ -338,4 +368,7 @@ def topic_overviews(
         ingest_topic(results, project_name, es)
     else:
         print('No need to ingest topics')
+
+    # Cache the results for 10 minutes
+    redis_client.set_with_ttl(cache_key, results, ttl_seconds=30*60)
     return results

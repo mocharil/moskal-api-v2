@@ -16,6 +16,7 @@ from typing import Dict, List, Literal, Optional, Union, Tuple
 # Import utilitas dari paket utils
 from utils.es_client import get_elasticsearch_client
 from utils.es_query_builder import get_date_range
+from utils.redis_client import redis_client
 
 def get_presence_score(
     es_host=None,
@@ -44,65 +45,41 @@ def get_presence_score(
     compare_with_topics=True,
     num_topics_to_compare=10
 ) -> Dict:
-    """
-    Mendapatkan presence score dari Elasticsearch
-    
-    Parameters:
-    -----------
-    es_host : str
-        Host Elasticsearch
-    es_username : str, optional
-        Username Elasticsearch
-    es_password : str, optional
-        Password Elasticsearch
-    use_ssl : bool, optional
-        Gunakan SSL untuk koneksi
-    verify_certs : bool, optional
-        Verifikasi sertifikat SSL
-    ca_certs : str, optional
-        Path ke sertifikat CA
-    keywords : list, optional
-        Daftar keyword untuk filter (topik utama)
-    search_exact_phrases : bool, optional
-        Jika True, gunakan match_phrase untuk pencarian keyword, jika False gunakan match AND
-    case_sensitive : bool, optional
-        Jika True, pencarian keyword bersifat case-sensitive, jika False tidak memperhatikan huruf besar/kecil
-    start_date : str, optional
-        Tanggal awal format YYYY-MM-DD
-    end_date : str, optional
-        Tanggal akhir format YYYY-MM-DD
-    date_filter : str, optional
-        Filter tanggal untuk digunakan jika start_date dan end_date tidak disediakan
-    custom_start_date : str, optional
-        Tanggal awal kustom jika date_filter adalah "custom"
-    custom_end_date : str, optional
-        Tanggal akhir kustom jika date_filter adalah "custom"
-    channels : list, optional
-        Daftar channel ['twitter', 'news', 'instagram', dll]
-    importance : str, optional
-        'important mentions' atau 'all mentions'
-    influence_score_min : float, optional
-        Skor pengaruh minimum (0-100)
-    influence_score_max : float, optional
-        Skor pengaruh maksimum (0-100)
-    region : list, optional
-        Daftar region
-    language : list, optional
-        Daftar bahasa
-    domain : list, optional
-        Daftar domain untuk filter
-    interval : str, optional
-        Interval untuk data deret waktu ('day', 'week', 'month')
-    compare_with_topics : bool, optional
-        Apakah membandingkan dengan topik lain
-    num_topics_to_compare : int, optional
-        Jumlah topik lain untuk dibandingkan
-        
-    Returns:
-    --------
-    Dict
-        Dictionary berisi data presence score
-    """
+     # Generate cache key based on all parameters
+    cache_key = redis_client.generate_cache_key(
+        "get_presence_score",
+        es_host=es_host,
+        es_username=es_username,
+        es_password=es_password,
+        use_ssl=use_ssl,
+        verify_certs=verify_certs,
+        ca_certs=ca_certs,
+        keywords=keywords,
+        search_exact_phrases=search_exact_phrases,
+        case_sensitive=case_sensitive,
+        sentiment=sentiment,
+        start_date=start_date,
+        end_date=end_date,
+        date_filter=date_filter,
+        custom_start_date=custom_start_date,
+        custom_end_date=custom_end_date,
+        channels=channels,
+        importance=importance,
+        influence_score_min=influence_score_min,
+        influence_score_max=influence_score_max,
+        region=region,
+        language=language,
+        domain=domain,
+        interval=interval,
+        compare_with_topics=compare_with_topics,
+        num_topics_to_compare=num_topics_to_compare
+    )
+
+    cached_result = redis_client.get(cache_key)
+    if cached_result is not None:
+        print('Returning cached result')
+        return cached_result
+
     # Buat koneksi Elasticsearch
     es = get_elasticsearch_client(
         es_host=es_host,
@@ -415,27 +392,15 @@ def get_presence_score(
                 "end_date": end_date
             }
         }
-        
+                # Cache the results for 10 minutes
+        redis_client.set_with_ttl(cache_key, result, ttl_seconds=100)
         return result
         
     except Exception as e:
         print(f"Error querying Elasticsearch: {e}")
         return {}
 
-def format_presence_score_data(data):
-    """
-    Format presence score data untuk tampilan yang lebih baik
-    
-    Parameters:
-    -----------
-    data : dict
-        Data presence score dari get_presence_score()
-        
-    Returns:
-    --------
-    dict
-        Data yang sudah diformat
-    """
+
     if not data:
         return {}
     

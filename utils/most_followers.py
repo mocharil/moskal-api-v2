@@ -1,11 +1,3 @@
-"""
-most_followers.py - Script untuk mendapatkan akun dengan followers/koneksi terbanyak
-
-Script ini menganalisis data dari Elasticsearch untuk menentukan akun
-dengan jumlah followers/koneksi terbanyak yang membicarakan suatu topik,
-dengan dukungan pagination.
-"""
-
 import json
 from datetime import datetime
 from typing import Dict, List, Literal, Optional, Union
@@ -13,6 +5,7 @@ from typing import Dict, List, Literal, Optional, Union
 # Import utilitas dari paket utils
 from utils.es_client import get_elasticsearch_client
 from utils.es_query_builder import get_date_range
+from utils.redis_client import redis_client
 
 def get_most_followers(
     es_host=None,
@@ -42,69 +35,43 @@ def get_most_followers(
     page_size=10,
     include_total_count=True
 ) -> Dict:
-    """
-    Mendapatkan daftar akun dengan jumlah followers terbanyak
-    
-    Parameters:
-    -----------
-    es_host : str
-        Host Elasticsearch
-    es_username : str, optional
-        Username Elasticsearch
-    es_password : str, optional
-        Password Elasticsearch
-    use_ssl : bool, optional
-        Gunakan SSL untuk koneksi
-    verify_certs : bool, optional
-        Verifikasi sertifikat SSL
-    ca_certs : str, optional
-        Path ke sertifikat CA
-    keywords : list, optional
-        Daftar keyword untuk filter
-    search_exact_phrases : bool, optional
-        Jika True, gunakan match_phrase untuk pencarian keyword, jika False gunakan match AND
-    case_sensitive : bool, optional
-        Jika True, pencarian keyword bersifat case-sensitive, jika False tidak memperhatikan huruf besar/kecil
-    sentiment : list, optional
-        Daftar sentiment ['positive', 'negative', 'neutral']
-    start_date : str, optional
-        Tanggal awal format YYYY-MM-DD
-    end_date : str, optional
-        Tanggal akhir format YYYY-MM-DD
-    date_filter : str, optional
-        Filter tanggal untuk digunakan jika start_date dan end_date tidak disediakan
-    custom_start_date : str, optional
-        Tanggal awal kustom jika date_filter adalah "custom"
-    custom_end_date : str, optional
-        Tanggal akhir kustom jika date_filter adalah "custom"
-    channels : list, optional
-        Daftar channel ['twitter', 'news', 'instagram', dll]
-    importance : str, optional
-        'important mentions' atau 'all mentions'
-    influence_score_min : float, optional
-        Skor pengaruh minimum (0-100)
-    influence_score_max : float, optional
-        Skor pengaruh maksimum (0-100)
-    region : list, optional
-        Daftar region
-    language : list, optional
-        Daftar bahasa
-    domain : list, optional
-        Daftar domain untuk filter
-    limit : int, optional
-        Jumlah total akun yang akan dianalisis (untuk keseluruhan dataset)
-    page : int, optional
-        Halaman yang akan diambil (untuk pagination)
-    page_size : int, optional
-        Jumlah item per halaman (untuk pagination)
-    include_total_count : bool, optional
-        Sertakan jumlah total akun di hasil
-        
-    Returns:
-    --------
-    Dict
-        Dictionary berisi daftar akun dengan jumlah followers terbanyak dengan dukungan pagination
-    """
+ 
+
+    cache_key = redis_client.generate_cache_key(
+        "get_most_followers",
+        es_host=es_host,
+        es_username=es_username,
+        es_password=es_password,
+        use_ssl=use_ssl,
+        verify_certs=verify_certs,
+        ca_certs=ca_certs,
+        keywords=keywords,
+        search_exact_phrases=search_exact_phrases,
+        case_sensitive=case_sensitive,
+        sentiment=sentiment,
+        start_date=start_date,
+        end_date=end_date,
+        date_filter=date_filter,
+        custom_start_date=custom_start_date,
+        custom_end_date=custom_end_date,
+        channels=channels,
+        importance=importance,
+        influence_score_min=influence_score_min,
+        influence_score_max=influence_score_max,
+        region=region,
+        language=language,
+        domain=domain,
+        limit=limit,
+        page=page,
+        page_size=page_size,
+        include_total_count=include_total_count
+    )
+    # Try to get from cache first
+    cached_result = redis_client.get(cache_key)
+    if cached_result is not None:
+        print('Returning cached result')
+        return cached_result
+
     # Buat koneksi Elasticsearch
     es = get_elasticsearch_client(
         es_host=es_host,
@@ -425,6 +392,7 @@ def get_most_followers(
         if include_total_count:
             result["total_mentions"] = total_mentions
         
+        redis_client.set_with_ttl(cache_key, result, ttl_seconds=100)
         return result
     
     except Exception as e:

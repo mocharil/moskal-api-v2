@@ -1,9 +1,9 @@
 from utils.list_of_mentions import get_mentions
 from utils.gemini import call_gemini
+from utils.redis_client import redis_client
 import pandas as pd
 import re
 import json
-
 
 def get_topics_sentiment_analysis(
     es_host=None,
@@ -29,19 +29,40 @@ def get_topics_sentiment_analysis(
     language=None,
     domain=None
 ):
-    """
-    Mengambil analisis topik berdasarkan sentimen (positif dan negatif) 
-    menggunakan model Gemini untuk menganalisis konten.
-    
-    Returns:
-    --------
-    dict
-        Dictionary berisi rangkuman topik positif dan negatif:
-        {
-            'positive_topics': "...",
-            'negative_topics': "..."
-        }
-    """
+
+    # Generate cache key based on all parameters
+    cache_key = redis_client.generate_cache_key(
+        "topics_sentiment_analysis",
+        es_host=es_host,
+        es_username=es_username,
+        es_password=es_password,
+        use_ssl=use_ssl,
+        verify_certs=verify_certs,
+        ca_certs=ca_certs,
+        keywords=keywords,
+        search_exact_phrases=search_exact_phrases,
+        case_sensitive=case_sensitive,
+        sentiment=sentiment,
+        start_date=start_date,
+        end_date=end_date,
+        date_filter=date_filter,
+        custom_start_date=custom_start_date,
+        custom_end_date=custom_end_date,
+        channels=channels,
+        importance=importance,
+        influence_score_min=influence_score_min,
+        influence_score_max=influence_score_max,
+        region=region,
+        language=language,
+        domain=domain
+    )
+
+    # Try to get from cache first
+    cached_result = redis_client.get(cache_key)
+    if cached_result is not None:
+        print('Returning cached result')
+        return cached_result
+
     # Mendapatkan post positif
     post_positive = get_mentions(
         es_host=es_host,
@@ -124,7 +145,11 @@ def get_topics_sentiment_analysis(
     try:
         # Mencoba parse JSON dari respons
         json_result = re.findall(r'\{.*\}', prediction, flags=re.I|re.S)[0]
-        return json.loads(json_result)
+        result = json.loads(json_result)
+        
+        # Cache the results for 10 minutes
+        redis_client.set_with_ttl(cache_key, result, ttl_seconds=100)
+        return result
     except (json.JSONDecodeError, IndexError) as e:
         # Menangani error parsing
         return {

@@ -1,10 +1,3 @@
-"""
-intents_emotions_share.py - Script untuk mendapatkan distribusi intent dan emotions untuk chart
-
-Script ini menganalisis data dari Elasticsearch untuk mengetahui distribusi persentase
-mentions berdasarkan intent, emotions, dan region khusus untuk pembuatan chart pie.
-"""
-
 import json
 import re
 from datetime import datetime
@@ -13,6 +6,7 @@ from typing import Dict, List, Literal, Optional, Union
 # Import utilitas dari paket utils
 from utils.es_client import get_elasticsearch_client
 from utils.es_query_builder import get_date_range, get_indices_from_channels
+from utils.redis_client import redis_client
 
 def get_intents_emotions_region_share(
     es_host=None,
@@ -39,89 +33,41 @@ def get_intents_emotions_region_share(
     domain=None,
     limit=10  # Jumlah intent dan emotions teratas untuk ditampilkan
 ) -> Dict:
-    """
-    Mendapatkan distribusi persentase intent, emotions, dan region untuk chart pie
-    
-    Parameters:
-    -----------
-    es_host : str
-        Host Elasticsearch
-    es_username : str, optional
-        Username Elasticsearch
-    es_password : str, optional
-        Password Elasticsearch
-    use_ssl : bool, optional
-        Gunakan SSL untuk koneksi
-    verify_certs : bool, optional
-        Verifikasi sertifikat SSL
-    ca_certs : str, optional
-        Path ke sertifikat CA
-    keywords : list, optional
-        Daftar keyword untuk filter
-    search_exact_phrases : bool, optional
-        Jika True, gunakan match_phrase untuk pencarian keyword, jika False gunakan match AND
-    case_sensitive : bool, optional
-        Jika True, pencarian keyword bersifat case-sensitive, jika False tidak memperhatikan huruf besar/kecil
-    sentiment : list, optional
-        Daftar sentiment ['positive', 'negative', 'neutral']
-    start_date : str, optional
-        Tanggal awal format YYYY-MM-DD
-    end_date : str, optional
-        Tanggal akhir format YYYY-MM-DD
-    date_filter : str, optional
-        Filter tanggal untuk digunakan jika start_date dan end_date tidak disediakan
-    custom_start_date : str, optional
-        Tanggal awal kustom jika date_filter adalah "custom"
-    custom_end_date : str, optional
-        Tanggal akhir kustom jika date_filter adalah "custom"
-    channels : list, optional
-        Daftar channel ['twitter', 'news', 'instagram', dll]
-    importance : str, optional
-        'important mentions' atau 'all mentions'
-    influence_score_min : float, optional
-        Skor pengaruh minimum (0-100)
-    influence_score_max : float, optional
-        Skor pengaruh maksimum (0-100)
-    region : list, optional
-        Daftar region
-    language : list, optional
-        Daftar bahasa
-    domain : list, optional
-        Daftar domain untuk filter
-    limit : int, optional
-        Jumlah intent, emotions, dan region teratas untuk ditampilkan
-        
-    Returns:
-    --------
-    Dict
-        Dictionary berisi distribusi persentase intent, emotions, dan region:
-        {
-            "intents_share": [
-                {"name": "informational", "percentage": 50},
-                {"name": "entertaining", "percentage": 22},
-                {"name": "advocacy", "percentage": 19},
-                {"name": "question query", "percentage": 6},
-                {"name": "promotional", "percentage": 3}
-            ],
-            "emotions_share": [
-                {"name": "neutral", "percentage": 67},
-                {"name": "disgust", "percentage": 31},
-                {"name": "sadness", "percentage": 3}
-            ],
-            "regions_share": [
-                {"name": "Jakarta", "percentage": 42},
-                {"name": "Surabaya", "percentage": 28},
-                {"name": "Bandung", "percentage": 15},
-                {"name": "Medan", "percentage": 10},
-                {"name": "Makassar", "percentage": 5}
-            ],
-            "total_mentions": 12000,
-            "period": {
-                "start_date": "2025-01-01",
-                "end_date": "2025-01-31"
-            }
-        }
-    """
+ 
+    # Generate cache key based on all parameters
+    cache_key = redis_client.generate_cache_key(
+        "intents_emotions_region",
+        es_host=es_host,
+        es_username=es_username,
+        es_password=es_password,
+        use_ssl=use_ssl,
+        verify_certs=verify_certs,
+        ca_certs=ca_certs,
+        keywords=keywords,
+        search_exact_phrases=search_exact_phrases,
+        case_sensitive=case_sensitive,
+        sentiment=sentiment,
+        start_date=start_date,
+        end_date=end_date,
+        date_filter=date_filter,
+        custom_start_date=custom_start_date,
+        custom_end_date=custom_end_date,
+        channels=channels,
+        importance=importance,
+        influence_score_min=influence_score_min,
+        influence_score_max=influence_score_max,
+        region=region,
+        language=language,
+        domain=domain,
+        limit=limit
+    )
+
+    # Try to get from cache first
+    cached_result = redis_client.get(cache_key)
+    if cached_result is not None:
+        print('Returning cached result')
+        return cached_result
+
     # Buat koneksi Elasticsearch
     es = get_elasticsearch_client(
         es_host=es_host,
@@ -507,6 +453,8 @@ def get_intents_emotions_region_share(
             }
         }
         
+        # Cache the results for 10 minutes
+        redis_client.set_with_ttl(cache_key, result, ttl_seconds=100)
         return result
         
     except Exception as e:
