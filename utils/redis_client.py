@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 class RedisClient:
     def __init__(self):
         try:
+            print('------------------connect to redis----------------')
             self.redis_client = Redis(
                 host=os.getenv('REDIS_HOST', 'localhost'),
                 port=int(os.getenv('REDIS_PORT', 6379)),
