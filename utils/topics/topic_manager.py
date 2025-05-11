@@ -101,7 +101,7 @@ def new_topics(
         neutral=('total_neutral', 'sum')
     ).reset_index()
 
-    df_final['share_of_voice'] = df_final['total_posts']/df_final['total_posts'].sum()*100
+    df_final['share_of_voice'] = (df_final['total_posts']/df_final['total_posts'].sum())*100
     df_final = df_final.sort_values('share_of_voice', ascending=False)
     
     return df_final.to_dict(orient='records')
@@ -230,7 +230,7 @@ def topic_existing_data(
         neutral=('total_neutral', 'sum')
     ).reset_index()
 
-    all_result['share_of_voice'] = all_result['total_posts']/all_result['total_posts'].sum()*100
+    all_result['share_of_voice'] = (all_result['total_posts']/all_result['total_posts'].sum())*100
     all_result = all_result.sort_values('share_of_voice', ascending=False)
     
     return all_result.to_dict(orient='records'), is_ingest

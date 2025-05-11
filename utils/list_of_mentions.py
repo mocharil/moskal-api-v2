@@ -417,7 +417,12 @@ def get_mentions(
     # Tambahkan source parameter ke query jika disediakan
     if source is not None:
         query["_source"] = source
-    
+    else:
+        query["_source"] = {
+                                "excludes": ["list_word","post_media_link",
+                                "list_comment","post_hashtags","post_mentions",
+                                "object","list_quotes"]
+                            }
 
     #Filter hanya data yang ada viral_score dan sentiment saja yang diambil
     mention_filter = {

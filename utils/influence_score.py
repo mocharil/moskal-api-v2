@@ -86,12 +86,11 @@ def influence_score_news(news_item):
     Q = 1 if news_item.get("list_quotes") and "quotes" in news_item.get("list_quotes").lower() else 0
 
     score = 0.6 * A + 0.2 * M + 0.2 * Q
-    return round(min(score * 10, 10), 2)
+    return round(min(score * 10, 10), 0)
 
 # Fungsi utama: deteksi channel dan hitung skor
 def get_influence_score(item):
     if item.get("channel", "").lower() == "news":
+        
         return influence_score_news(item)
     return influence_score_social(item["channel"], item)
-
-

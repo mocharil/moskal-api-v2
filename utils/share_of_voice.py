@@ -1,10 +1,3 @@
-"""
-share_of_voice.py - Script untuk mendapatkan share of voice (SOV) dari akun media sosial
-
-Script ini menganalisis data dari Elasticsearch untuk menentukan akun mana
-yang memiliki share of voice terbesar untuk suatu topik, dengan dukungan pagination.
-"""
-
 import json
 import pandas as pd
 from datetime import datetime

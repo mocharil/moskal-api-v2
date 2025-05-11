@@ -3,6 +3,7 @@ from utils.list_of_mentions import get_mentions
 import pandas as pd
 import uuid, numpy as np
 from elasticsearch import Elasticsearch
+from utils.influence_score import get_influence_score
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -60,6 +61,15 @@ def create_uuid(keyword):
 
     return uuid.uuid5(namespace, keyword)
 
+def rule_base_user_category(string, category):
+    if pd.isna(string):
+        return ''
+    
+    if 'news' in string.lower():
+        return 'News Account'
+
+    return category
+    
 def search_kol(   owner_id = None,
     project_name = None,
     es_host=None,
@@ -92,9 +102,11 @@ def search_kol(   owner_id = None,
 
     result = get_mentions(
             source= ["issue","user_connections","user_followers","user_influence_score",
-                     'user_image_url',"engagement_rate",
+                     'user_image_url',"engagement_rate","subscriber",
                  "influence_score","reach_score", "viral_score",
-                 "sentiment", "link_post","user_category","username",'channel'],
+                 "sentiment", "link_post","user_category","username",'channel',
+                "votes","likes",'comments','shares','retweets','reports','replies',
+                 'views','favorites'],
             page_size=10000,
             es_host=es_host,    
             es_username=es_username,
@@ -126,24 +138,24 @@ def search_kol(   owner_id = None,
         return []
     else:
         kol = pd.DataFrame(result['data'])
-        print(kol.shape)
- 
-        print('set metrics')
-        for i in set(['user_influence_score','user_followers']) - set(kol):
-            kol[i] = 0
 
-        if 'user_category' not in kol:
-            kol['user_category'] = 'News Account'
+        #-----------------------
 
-        kol[['user_influence_score','user_followers']] = kol[['user_influence_score','user_followers']].fillna(0)
+        kol['user_category'] = kol.apply(lambda s: 'News Account' if s['channel'] == 'news' else rule_base_user_category(s['username'], s['user_category']), axis=1)
+
+        kol['user_influence_score'] = kol.apply(lambda s: get_influence_score(s), axis=1)
+
+        #-----------------------                                
+
+        kol[['user_followers',"subscriber"]] = kol[['user_followers',"subscriber"]].fillna(0)
         kol['user_category'] = kol['user_category'].fillna('')
 
         kol['link_user'] = kol.apply(lambda s: create_link_user(s), axis=1)        
 
-        for i in set(['user_connections','user_followers']) - set(kol):
+        for i in set(['user_connections','user_followers','subscriber']) - set(kol):
             kol[i] = 0
 
-        kol['user_followers'] = kol['user_connections']+kol['user_followers']
+        kol['user_followers'] = kol['user_connections'] + kol['user_followers'] + kol['subscriber']
 
         # Your groupby with sentiment pivot
         agg_kol = kol.groupby(['link_user']).agg({
@@ -157,7 +169,7 @@ def search_kol(   owner_id = None,
             "engagement_rate":'sum',
             'issue': lambda s: list(set(s)),
             'user_category': 'max',
-            'user_influence_score': lambda s: max(s)*100
+            'user_influence_score': 'mean'
         })
 
         # Get sentiment counts per link_user using crosstab
@@ -219,12 +231,10 @@ def search_kol(   owner_id = None,
         final_kol['unified_issue'] = final_kol['issue'].transform(lambda s: list(set([dict_issue.get(i,i) for i in s]))[:5])
         final_kol['user_category'] = final_kol.apply(lambda s: 'News Account' if s['channel']=='news' else s['user_category'], axis=1)
         final_kol.drop('issue', axis=1, inplace=True)
-        final_kol['most_viral'] = (final_kol['viral_score'] + final_kol['reach_score']) * \
-                  np.log(final_kol['user_followers'] + 1.1) * np.log(final_kol['link_post'] + 1.1)* \
-                  (final_kol['user_influence_score'] + 1.1)
+        final_kol['most_viral'] = final_kol['user_influence_score']
 
 
-        final_kol["share_of_voice"] = final_kol["link_post"]/final_kol["link_post"].sum()*100
+        final_kol["share_of_voice"] = (final_kol["link_post"]/final_kol["link_post"].sum())*100
         
         most_negative_kol = final_kol.sort_values(['is_negative_driver','sentiment_negative','most_viral'], ascending = False)[:100]
         most_viral_kol = final_kol.sort_values('most_viral', ascending = False)[:100]
