@@ -162,14 +162,18 @@ def search_kol(   owner_id = None,
         kol = pd.DataFrame(result['data'])
 
         #-----------------------
-
+        if 'user_category' not in kol:
+            kol['user_category']=''
         kol['user_category'] = kol.apply(lambda s: 'News Account' if s['channel'] == 'news' else rule_base_user_category(s['username'], s['user_category']), axis=1)
 
         kol['user_influence_score'] = kol.apply(lambda s: get_influence_score(s), axis=1)
 
         #-----------------------            
         for c in set(['user_connections','user_followers','subscriber']) - set(kol.columns):
-            kol[c] =0                   
+            kol[c] = 0                   
+
+
+
 
         kol[['user_followers',"subscriber"]] = kol[['user_followers',"subscriber"]].fillna(0)
         kol['user_category'] = kol['user_category'].fillna('')
