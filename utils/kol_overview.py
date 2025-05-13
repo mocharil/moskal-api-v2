@@ -167,7 +167,9 @@ def search_kol(   owner_id = None,
 
         kol['user_influence_score'] = kol.apply(lambda s: get_influence_score(s), axis=1)
 
-        #-----------------------                                
+        #-----------------------            
+        for c in set(['user_connections','user_followers','subscriber']) - set(kol.columns):
+            kol[c] =0                   
 
         kol[['user_followers',"subscriber"]] = kol[['user_followers',"subscriber"]].fillna(0)
         kol['user_category'] = kol['user_category'].fillna('')
