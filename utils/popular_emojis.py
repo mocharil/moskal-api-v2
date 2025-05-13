@@ -8,6 +8,8 @@ from typing import Dict, List, Literal, Optional, Union
 from utils.es_client import get_elasticsearch_client
 from utils.es_query_builder import get_date_range
 from utils.redis_client import redis_client
+from utils.list_of_mentions import get_mentions
+
 def extract_emojis(text):
 
     if not text or not isinstance(text, str):
@@ -107,213 +109,57 @@ def get_popular_emojis(
         print('Returning cached result')
         return cached_result
 
-    # Buat koneksi Elasticsearch
-    es = get_elasticsearch_client(
-        es_host=es_host,
-        es_username=es_username,
-        es_password=es_password,
-        use_ssl=use_ssl,
-        verify_certs=verify_certs,
-        ca_certs=ca_certs
-    )
-    
-    if not es:
-        return {
-            "data": [],
-            "pagination": {
-                "page": page,
-                "page_size": page_size,
-                "total_pages": 0,
-                "total_items": 0
-            }
-        }
-    
-    # Definisikan semua channel yang mungkin
-    default_channels = ["twitter", "linkedin", "reddit", "youtube", "news"]
-    
-    # Filter channels jika disediakan
-    if channels:
-        selected_channels = [ch for ch in channels if ch in default_channels]
-    else:
-        selected_channels = default_channels
-    
+    if not channels:
+        channels =['youtube','twitter','tiktok','instagram']
 
-    # Dapatkan indeks yang akan di-query
-    indices = [f"{ch}_data" for ch in selected_channels]
-    
-    if not indices:
-        print("Error: No valid indices")
-        return {
-            "data": [],
-            "pagination": {
-                "page": page,
-                "page_size": page_size,
-                "total_pages": 0,
-                "total_items": 0
-            }
-        }
-    
-    # Dapatkan rentang tanggal jika tidak disediakan
-    if not start_date or not end_date:
-        start_date, end_date = get_date_range(
+    result = get_mentions(
+            source= ["channel",
+                    "link_post",
+                    "post_created_at",
+                        "post_caption"],
+            page_size=10000,
+            es_host=es_host,    
+            es_username=es_username,
+            es_password=es_password,
+            use_ssl=use_ssl,
+            verify_certs=verify_certs,
+            ca_certs=ca_certs,
+            keywords=keywords,
+            search_exact_phrases=search_exact_phrases,
+            case_sensitive=case_sensitive,
+            sentiment=sentiment,
+            start_date=start_date,
+            end_date=end_date,
             date_filter=date_filter,
             custom_start_date=custom_start_date,
-            custom_end_date=custom_end_date
+            custom_end_date=custom_end_date,
+            channels=channels,
+            importance=importance,
+            influence_score_min=influence_score_min,
+            influence_score_max=influence_score_max,
+            region=region,
+            language=language,
+            domain=domain,
+            sort_type = 'popular'
         )
-    
-    # Bangun query untuk mendapatkan data post_caption yang berisi emoji
-    must_conditions = [
-        {
-            "range": {
-                "post_created_at": {
-                    "gte": start_date,
-                    "lte": end_date
+
+    if not result['data']:
+        return {
+                    "data": [],
+                    "pagination": {
+                        "page": page,
+                        "page_size": page_size,
+                        "total_pages": 0,
+                        "total_items": 0
+                    },
+                    "error": str(e)
                 }
-            }
-        },
-        {
-            "exists": {
-                "field": "post_caption"
-            }
-        }
-    ]
-    
-    # Tambahkan filter keywords jika ada
-    if keywords:
-        # Konversi keywords ke list jika belum
-        keyword_list = keywords if isinstance(keywords, list) else [keywords]
-        keyword_should_conditions = []
-        
-        # Tentukan field yang akan digunakan berdasarkan case_sensitive
-        caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-        issue_field = "issue.keyword" if case_sensitive else "issue"
-        
-        if search_exact_phrases:
-            # Gunakan match_phrase untuk exact matching
-            for kw in keyword_list:
-                keyword_should_conditions.append({"match_phrase": {caption_field: kw}})
-                keyword_should_conditions.append({"match_phrase": {issue_field: kw}})
-        else:
-            # Gunakan match dengan operator AND
-            for kw in keyword_list:
-                keyword_should_conditions.append({"match": {caption_field: {"query": kw, "operator": "AND"}}})
-                keyword_should_conditions.append({"match": {issue_field: {"query": kw, "operator": "AND"}}})
-        
-        keyword_condition = {
-            "bool": {
-                "should": keyword_should_conditions,
-                "minimum_should_match": 1
-            }
-        }
-        must_conditions.append(keyword_condition)
-    
-    # Bangun filter untuk query
-    filter_conditions = []
-    
-    # Filter untuk importance
-    if importance == "important mentions":
-        filter_conditions.append({
-            "range": {
-                "influence_score": {
-                    "gt": 50
-                }
-            }
-        })
-        
-    # Filter untuk influence score
-    if influence_score_min is not None or influence_score_max is not None:
-        influence_condition = {"range": {"influence_score": {}}}
-        if influence_score_min is not None:
-            influence_condition["range"]["influence_score"]["gte"] = influence_score_min
-        if influence_score_max is not None:
-            influence_condition["range"]["influence_score"]["lte"] = influence_score_max
-        filter_conditions.append(influence_condition)
-        
-    # Filter untuk region menggunakan wildcard
-    if region:
-        region_conditions = []
-        region_list = region if isinstance(region, list) else [region]
-        
-        for r in region_list:
-            region_conditions.append({"wildcard": {"region": f"*{r}*"}})
-        
-        region_filter = {
-            "bool": {
-                "should": region_conditions,
-                "minimum_should_match": 1
-            }
-        }
-        filter_conditions.append(region_filter)
-        
-    # Filter untuk language menggunakan wildcard
-    if language:
-        language_conditions = []
-        language_list = language if isinstance(language, list) else [language]
-        
-        for l in language_list:
-            language_conditions.append({"wildcard": {"language": f"*{l}*"}})
-        
-        language_filter = {
-            "bool": {
-                "should": language_conditions,
-                "minimum_should_match": 1
-            }
-        }
-        filter_conditions.append(language_filter)
-        
-    # Filter untuk domain
-    if domain:
-        domain_condition = {
-            "bool": {
-                "should": [{"wildcard": {"link_post": f"*{d}*"}} for d in (domain if isinstance(domain, list) else [domain])],
-                "minimum_should_match": 1
-            }
-        }
-        filter_conditions.append(domain_condition)
-    
-    # Filter untuk sentiment
-    if sentiment:
-        sentiment_condition = {
-            "terms": {
-                "sentiment": sentiment if isinstance(sentiment, list) else [sentiment]
-            }
-        }
-        filter_conditions.append(sentiment_condition)
-    
-    # Kita perlu mengambil konten post_caption untuk ekstraksi emoji
-    query = {
-        "query": {
-            "bool": {
-                "must": must_conditions
-            }
-        },
-        "_source": ["post_caption"],
-        "size": 1000  # Mengambil 1000 dokumen per scroll
-    }
-    
-    # Tambahkan filter jika ada
-    if filter_conditions:
-        query["query"]["bool"]["filter"] = filter_conditions
-    
+
     try:
-        # Gunakan scan/scroll untuk mendapatkan sejumlah besar dokumen
         emoji_counts = {}
-        total_processed = 0
-        max_docs = 10000  # Batasi jumlah dokumen yang diproses (opsional)
+        for i in result['data']:
+            post_caption = i['post_caption']
         
-        # Lakukan scroll pertama
-        resp = es.search(
-            index=",".join(indices),
-            body=query,
-            scroll="2m"
-        )
-        
-        scroll_id = resp["_scroll_id"]
-        scroll_size = len(resp["hits"]["hits"])
-        
-        # Proses batch pertama
-        for hit in resp["hits"]["hits"]:
-            post_caption = hit["_source"].get("post_caption", "")
             emojis = extract_emojis(post_caption)
             
             for emoji in emojis:
@@ -322,34 +168,6 @@ def get_popular_emojis(
                 else:
                     emoji_counts[emoji] = 1
                     
-        total_processed += scroll_size
-        
-        # Lakukan scroll selanjutnya
-        while scroll_size > 0 and total_processed < max_docs:
-            resp = es.scroll(scroll_id=scroll_id, scroll="2m")
-            scroll_id = resp["_scroll_id"]
-            scroll_size = len(resp["hits"]["hits"])
-            
-            # Proses batch ini
-            for hit in resp["hits"]["hits"]:
-                post_caption = hit["_source"].get("post_caption", "")
-                emojis = extract_emojis(post_caption)
-                
-                for emoji in emojis:
-                    if emoji in emoji_counts:
-                        emoji_counts[emoji] += 1
-                    else:
-                        emoji_counts[emoji] = 1
-                        
-            total_processed += scroll_size
-            
-            # Print status
-            print(f"Processed {total_processed} documents, found {len(emoji_counts)} unique emojis")
-            
-            # Jika tidak ada lagi hasil, keluar dari loop
-            if not resp["hits"]["hits"]:
-                break
-        
         # Konversi ke format yang diinginkan
         emoji_data = [
             {"emoji": emoji, "total_mentions": count}
@@ -363,38 +181,15 @@ def get_popular_emojis(
         if limit and len(emoji_data) > limit:
             emoji_data = emoji_data[:limit]
         
-        # Hitung nilai pagination
-        total_items = len(emoji_data)
-        total_pages = (total_items + page_size - 1) // page_size  # ceiling division
-        
-        # Validasi nomor halaman
-        if page < 1:
-            page = 1
-        elif page > total_pages and total_pages > 0:
-            page = total_pages
             
-        # Terapkan pagination
-        start_index = (page - 1) * page_size
-        end_index = min(start_index + page_size, total_items)
-        
-        paginated_data = emoji_data[start_index:end_index]
         
         # Buat hasil dengan informasi pagination
         result = {
-            "data": paginated_data,
+            "data": emoji_data[:20],
             "pagination": {
-                "page": page,
-                "page_size": page_size,
-                "total_pages": total_pages,
-                "total_items": total_items
-            },
-            "channels": selected_channels,
-            "total_unique_emojis": len(emoji_counts),
-            "period": {
-                "start_date": start_date,
-                "end_date": end_date
-            },
-            "total_documents_processed": total_processed
+                "page": 1,
+                "page_size": 20
+            }
         }
         
         redis_client.set_with_ttl(cache_key, result, ttl_seconds=600)
