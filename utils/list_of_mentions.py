@@ -354,7 +354,7 @@ def get_mentions(
                                     String username = doc.containsKey('username.keyword') && !doc['username.keyword'].empty ? doc['username.keyword'].value : "";
                                     double A = params.whitelist.contains(username) ? 1.0 : 0.0;
                                     double M = (doc.containsKey('post_media_link') && !doc['post_media_link'].empty && doc['post_media_link'].value.contains("http")) ? 1.0 : 0.0;
-                                    double Q = doc.containsKey('list_quotes') && !doc['list_quotes'].empty && doc['list_quotes'].value.contains("quotes") ? 1.0 : 0.0;
+                                    double Q = doc.containsKey('list_quotes.keyword') && !doc['list_quotes.keyword'].empty && doc['list_quotes.keyword'].value.contains("quotes") ? 1.0 : 0.0;
                                     score = (0.6 * A + 0.2 * M + 0.2 * Q) * 10;
                                 }
 
@@ -410,7 +410,7 @@ def get_mentions(
         
         # Dapatkan posts
         posts = [hit["_source"] for hit in response["hits"]["hits"]]
-  
+
         for i in posts:
             if i['channel'] == 'news':
                 if 'username' not in i:
@@ -446,7 +446,7 @@ def get_mentions(
         # Cache the results for 10 minutes
         redis_client.set_with_ttl(cache_key, result, ttl_seconds=100)
         return result
-        
+    
     except Exception as e:
         print(f"Error querying Elasticsearch: {e}")
-        return {'posts': [], 'pagination': {'page': page, 'page_size': page_size, 'total_pages': 0, 'total_posts': 0}}
+        return {'data': [], 'pagination': {'page': page, 'page_size': page_size, 'total_pages': 0, 'total_posts': 0}}

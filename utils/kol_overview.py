@@ -128,7 +128,7 @@ def search_kol(   owner_id = None,
                  "influence_score","reach_score", "viral_score",
                  "sentiment", "link_post","user_category","username",'channel',
                 "votes","likes",'comments','shares','retweets','reports','replies',
-                 'views','favorites'],
+                 'views','favorites',"post_created_at"],
             page_size=10000,
             es_host=es_host,    
             es_username=es_username,
@@ -154,7 +154,6 @@ def search_kol(   owner_id = None,
             domain=domain,
             sort_type = 'popular'
         )
-    
 
     if not result['data']:
         return []
@@ -164,6 +163,7 @@ def search_kol(   owner_id = None,
         #-----------------------
         if 'user_category' not in kol:
             kol['user_category']=''
+
         kol['user_category'] = kol.apply(lambda s: 'News Account' if s['channel'] == 'news' else rule_base_user_category(s['username'], s['user_category']), axis=1)
 
         kol['user_influence_score'] = kol.apply(lambda s: get_influence_score(s), axis=1)
@@ -171,8 +171,6 @@ def search_kol(   owner_id = None,
         #-----------------------            
         for c in set(['user_connections','user_followers','subscriber']) - set(kol.columns):
             kol[c] = 0                   
-
-
 
 
         kol[['user_followers',"subscriber"]] = kol[['user_followers',"subscriber"]].fillna(0)

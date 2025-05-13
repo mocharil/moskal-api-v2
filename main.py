@@ -352,7 +352,13 @@ def keyword_trends_analysis(
     - Analysis
     - Comparison
     """
-    return get_keyword_trends(**params.dict())
+    params_dict = params.dict()
+
+    # Ubah isi 'channels' jika ada
+    if 'channels' in params_dict and isinstance(params_dict['channels'], list):
+        params_dict['channels'] = ['news' if ch == 'media' else ch for ch in params_dict['channels']]
+
+    return get_keyword_trends(**params_dict)
 
 @app.post("/api/v2/context-of-discussion", tags=["Dashboard Menu"])
 def context_analysis(
@@ -376,7 +382,13 @@ def context_analysis(
     - Analysis
     - Comparison
     """
-    return get_context_of_discussion(**params.dict())
+    params_dict = params.dict()
+
+    # Ubah isi 'channels' jika ada
+    if 'channels' in params_dict and isinstance(params_dict['channels'], list):
+        params_dict['channels'] = ['news' if ch == 'media' else ch for ch in params_dict['channels']]
+
+    return get_context_of_discussion(**params_dict)
 
 @app.post("/api/v2/list-of-mentions", tags=["Dashboard Menu"])
 def get_mentions_list(
@@ -424,7 +436,13 @@ def get_mentions_list(
     - page: halaman yang ditampilkan
     - page_size: jumlah data per halaman
     """
-    return get_mentions(**params.dict())
+    params_dict = params.dict()
+
+    # Ubah isi 'channels' jika ada
+    if 'channels' in params_dict and isinstance(params_dict['channels'], list):
+        params_dict['channels'] = ['news' if ch == 'media' else ch for ch in params_dict['channels']]
+
+    return get_mentions(**params_dict)
 
 
 ########### ANALYSIS MENU ##########
@@ -765,6 +783,8 @@ def topics_sentiment_analysis(
     - Topics:
         Overall Sentiment -> di description per sentiment
     """
+
+
     return get_topics_sentiment_analysis(**params.dict())
 
 @app.post("/api/v2/topics-overview", tags=["Topics Menu"])
@@ -799,7 +819,14 @@ def topics_overview_analysis(
     - owner_id: ID pemilik project
     - project_name: Nama project
     """
-    return topic_overviews(**params.dict())
+
+    params_dict = params.dict()
+
+    # Ubah isi 'channels' jika ada
+    if 'channels' in params_dict and isinstance(params_dict['channels'], list):
+        params_dict['channels'] = ['news' if ch == 'media' else ch for ch in params_dict['channels']]
+
+    return topic_overviews(**params_dict)
 
 @app.post("/api/v2/kol-overview", tags=["KOL Menu"])
 def kol_overview_analysis(
@@ -835,5 +862,11 @@ def kol_overview_analysis(
     - owner_id: ID pemilik project
     - project_name: Nama project
     """
-    return search_kol(**params.dict())
+    params_dict = params.dict()
+
+    # Ubah isi 'channels' jika ada
+    if 'channels' in params_dict and isinstance(params_dict['channels'], list):
+        params_dict['channels'] = ['news' if ch == 'media' else ch for ch in params_dict['channels']]
+
+    return search_kol(**params_dict)
 
