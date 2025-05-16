@@ -22,6 +22,7 @@ def get_mentions(
     verify_certs=False,
     ca_certs=None,
     keywords=None,
+    search_keyword=None,
     search_exact_phrases=False,
     case_sensitive=False,
     sentiment=None,
@@ -53,6 +54,7 @@ def get_mentions(
         verify_certs=verify_certs,
         ca_certs=ca_certs,
         keywords=keywords,
+        search_keyword=search_keyword,
         search_exact_phrases=search_exact_phrases,
         case_sensitive=case_sensitive,
         sentiment=sentiment,
@@ -144,58 +146,80 @@ def get_mentions(
             }
         }
         
-        # Tambahkan filter keyword berdasarkan search_exact_phrases
-        if keywords:
-            # Konversi keywords ke list jika belum
-            keyword_list = keywords if isinstance(keywords, list) else [keywords]
+        # Add keyword and search_keyword filters
+        if keywords or search_keyword:
+            must_conditions_inner = []
             
-            # Logic untuk post_caption
-            if search_exact_phrases:
-                # Menggunakan match_phrase dengan boost
-                if case_sensitive:
-                    caption_should = [
-                        {"match_phrase": {"post_caption.keyword": {"query": kw, "boost": 2.0}}} 
-                        for kw in keyword_list
-                    ]
-                    issue_should = [
-                        {"match_phrase": {"issue.keyword": {"query": kw, "boost": 1.5}}} 
-                        for kw in keyword_list
-                    ]
-                else:
-                    caption_should = [
-                        {"match_phrase": {"post_caption": {"query": kw, "boost": 2.0}}} 
-                        for kw in keyword_list
-                    ]
-                    issue_should = [
-                        {"match_phrase": {"issue": {"query": kw, "boost": 1.5}}} 
-                        for kw in keyword_list
-                    ]
+            # Handle regular keywords
+            if keywords:
+                # Konversi keywords ke list jika belum
+                keyword_list = keywords if isinstance(keywords, list) else [keywords]
+                keyword_should_conditions = []
                 
-                query["query"]["bool"]["should"].extend(caption_should)
-                query["query"]["bool"]["should"].extend(issue_should)
-            else:
-                # Menggunakan match dengan operator AND
-                if case_sensitive:
-                    caption_should = [
-                        {"match": {"post_caption.keyword": {"query": kw, "operator": "AND", "boost": 2.0}}} 
-                        for kw in keyword_list
-                    ]
-                    issue_should = [
-                        {"match": {"issue.keyword": {"query": kw, "operator": "AND", "boost": 1.5}}} 
-                        for kw in keyword_list
-                    ]
-                else:
-                    caption_should = [
-                        {"match": {"post_caption": {"query": kw, "operator": "AND", "boost": 2.0}}} 
-                        for kw in keyword_list
-                    ]
-                    issue_should = [
-                        {"match": {"issue": {"query": kw, "operator": "AND", "boost": 1.5}}} 
-                        for kw in keyword_list
-                    ]
+                # Tentukan field yang akan digunakan berdasarkan case_sensitive
+                caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
+                issue_field = "issue.keyword" if case_sensitive else "issue"
                 
-                query["query"]["bool"]["should"].extend(caption_should)
-                query["query"]["bool"]["should"].extend(issue_should)
+                if search_exact_phrases:
+                    # Gunakan match_phrase untuk exact matching
+                    for kw in keyword_list:
+                        keyword_should_conditions.extend([
+                            {"match_phrase": {caption_field: kw}},
+                            {"match_phrase": {issue_field: kw}}
+                        ])
+                else:
+                    # Gunakan match dengan operator AND
+                    for kw in keyword_list:
+                        keyword_should_conditions.extend([
+                            {"match": {caption_field: {"query": kw, "operator": "AND"}}},
+                            {"match": {issue_field: {"query": kw, "operator": "AND"}}}
+                        ])
+                
+                must_conditions_inner.append({
+                    "bool": {
+                        "should": keyword_should_conditions,
+                        "minimum_should_match": 1
+                    }
+                })
+            
+            # Handle search_keyword with same logic as keywords
+            if search_keyword:
+                # Konversi search_keyword ke list jika belum
+                search_keyword_list = search_keyword if isinstance(search_keyword, list) else [search_keyword]
+                search_keyword_should_conditions = []
+                
+                # Tentukan field yang akan digunakan berdasarkan case_sensitive
+                caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
+                issue_field = "issue.keyword" if case_sensitive else "issue"
+                
+                if search_exact_phrases:
+                    # Gunakan match_phrase untuk exact matching
+                    for sk in search_keyword_list:
+                        search_keyword_should_conditions.extend([
+                            {"match_phrase": {caption_field: sk}},
+                            {"match_phrase": {issue_field: sk}}
+                        ])
+                else:
+                    # Gunakan match dengan operator AND
+                    for sk in search_keyword_list:
+                        search_keyword_should_conditions.extend([
+                            {"match": {caption_field: {"query": sk, "operator": "AND"}}},
+                            {"match": {issue_field: {"query": sk, "operator": "AND"}}}
+                        ])
+                
+                must_conditions_inner.append({
+                    "bool": {
+                        "should": search_keyword_should_conditions,
+                        "minimum_should_match": 1
+                    }
+                })
+            
+            # Add the combined conditions to must_conditions
+            must_conditions.append({
+                "bool": {
+                    "must": must_conditions_inner
+                }
+            })
         
         # Tambahkan filter sentiment jika ada
         if sentiment:
@@ -270,6 +294,7 @@ def get_mentions(
         # Bangun query biasa untuk non-relevant sort
         query = build_elasticsearch_query(
             keywords=keywords,
+            search_keyword=search_keyword,
             search_exact_phrases=search_exact_phrases,
             case_sensitive=case_sensitive,
             sentiment=sentiment,
@@ -403,6 +428,8 @@ def get_mentions(
 
     # Jalankan query
     try:
+        import json
+        print(json.dumps(query, indent=2))
         response = es.search(
             index=",".join(indices),
             body=query

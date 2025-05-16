@@ -15,6 +15,7 @@ def create_uuid(keyword: str) -> str:
 def get_data_topics(
     es: Optional[Elasticsearch] = None,
     keywords=None,
+    search_keyword=None,
     search_exact_phrases=False,
     case_sensitive=False,
     start_date=None,
@@ -74,23 +75,78 @@ def get_data_topics(
         }
     ]
 
-    if keywords:
-        keyword_should_conditions = []
-        field_caption = "post_caption.keyword" if case_sensitive else "post_caption"
-        field_issue = "issue.keyword" if case_sensitive else "issue"
-
-        for kw in (keywords if isinstance(keywords, list) else [keywords]):
-            if search_exact_phrases:
-                keyword_should_conditions.append({"match_phrase": {field_caption: kw}})
-                keyword_should_conditions.append({"match_phrase": {field_issue: kw}})
-            else:
-                keyword_should_conditions.append({"match": {field_caption: {"query": kw, "operator": "AND"}}})
-                keyword_should_conditions.append({"match": {field_issue: {"query": kw, "operator": "AND"}}})
+    # Add keyword and search_keyword filters
+    if keywords or search_keyword:
+        must_conditions_inner = []
         
+        # Handle regular keywords
+        if keywords:
+            # Konversi keywords ke list jika belum
+            keyword_list = keywords if isinstance(keywords, list) else [keywords]
+            keyword_should_conditions = []
+            
+            # Tentukan field yang akan digunakan berdasarkan case_sensitive
+            caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
+            issue_field = "issue.keyword" if case_sensitive else "issue"
+            
+            if search_exact_phrases:
+                # Gunakan match_phrase untuk exact matching
+                for kw in keyword_list:
+                    keyword_should_conditions.extend([
+                        {"match_phrase": {caption_field: kw}},
+                        {"match_phrase": {issue_field: kw}}
+                    ])
+            else:
+                # Gunakan match dengan operator AND
+                for kw in keyword_list:
+                    keyword_should_conditions.extend([
+                        {"match": {caption_field: {"query": kw, "operator": "AND"}}},
+                        {"match": {issue_field: {"query": kw, "operator": "AND"}}}
+                    ])
+            
+            must_conditions_inner.append({
+                "bool": {
+                    "should": keyword_should_conditions,
+                    "minimum_should_match": 1
+                }
+            })
+        
+        # Handle search_keyword with same logic as keywords
+        if search_keyword:
+            # Konversi search_keyword ke list jika belum
+            search_keyword_list = search_keyword if isinstance(search_keyword, list) else [search_keyword]
+            search_keyword_should_conditions = []
+            
+            # Tentukan field yang akan digunakan berdasarkan case_sensitive
+            caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
+            issue_field = "issue.keyword" if case_sensitive else "issue"
+            
+            if search_exact_phrases:
+                # Gunakan match_phrase untuk exact matching
+                for sk in search_keyword_list:
+                    search_keyword_should_conditions.extend([
+                        {"match_phrase": {caption_field: sk}},
+                        {"match_phrase": {issue_field: sk}}
+                    ])
+            else:
+                # Gunakan match dengan operator AND
+                for sk in search_keyword_list:
+                    search_keyword_should_conditions.extend([
+                        {"match": {caption_field: {"query": sk, "operator": "AND"}}},
+                        {"match": {issue_field: {"query": sk, "operator": "AND"}}}
+                    ])
+            
+            must_conditions_inner.append({
+                "bool": {
+                    "should": search_keyword_should_conditions,
+                    "minimum_should_match": 1
+                }
+            })
+        
+        # Add the combined conditions to must_conditions
         must_conditions.append({
             "bool": {
-                "should": keyword_should_conditions,
-                "minimum_should_match": 1
+                "must": must_conditions_inner
             }
         })
 
@@ -176,6 +232,9 @@ def get_data_topics(
         query_body["query"]["bool"]["filter"] = filter_conditions
 
     try:
+
+        import json
+        print(json.dumps(query_body, indent=2))
         response = es.search(
             index=",".join(available_indices),
             body=query_body

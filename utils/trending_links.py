@@ -52,6 +52,7 @@ def get_trending_links(
     verify_certs=False,
     ca_certs=None,
     keywords=None,
+    search_keyword=None,
     search_exact_phrases=False,
     case_sensitive=False,
     sentiment=None,
@@ -75,31 +76,32 @@ def get_trending_links(
     # Generate cache key based on all parameters
     cache_key = redis_client.generate_cache_key(
         "get_trending_links",
-        es_host=None,
-        es_username=None,
-        es_password=None,
-        use_ssl=False,
-        verify_certs=False,
-        ca_certs=None,
-        keywords=None,
-        search_exact_phrases=False,
-        case_sensitive=False,
-        sentiment=None,
-        start_date=None,
-        end_date=None,
-        date_filter="last 30 days",
-        custom_start_date=None,
-        custom_end_date=None,
-        channels=None,
-        importance="all mentions",
-        influence_score_min=None,
-        influence_score_max=None,
-        region=None,
-        language=None,
-        domain=None,
-        limit=10000,       # Total links to analyze
-        page=1,          # Current page number
-        page_size=10     # Number of items per page
+        es_host=es_host,
+        es_username=es_username,
+        es_password=es_password,
+        use_ssl=use_ssl,
+        verify_certs=verify_certs,
+        ca_certs=ca_certs,
+        keywords=keywords,
+        search_keyword=search_keyword,
+        search_exact_phrases=search_exact_phrases,
+        case_sensitive=case_sensitive,
+        sentiment=sentiment,
+        start_date=start_date,
+        end_date=end_date,
+        date_filter=date_filter,
+        custom_start_date=custom_start_date,
+        custom_end_date=custom_end_date,
+        channels=channels,
+        importance=importance,
+        influence_score_min=influence_score_min,
+        influence_score_max=influence_score_max,
+        region=region,
+        language=language,
+        domain=domain,
+        limit=limit,       # Total hashtags to analyze (increased for better pagination)
+        page=page,          # Current page number
+        page_size=page_size,    # Number of items per page
 
     )
 
@@ -196,35 +198,80 @@ def get_trending_links(
         }
     ]
     
-    # Tambahkan filter keywords jika ada
-    if keywords:
-        # Konversi keywords ke list jika belum
-        keyword_list = keywords if isinstance(keywords, list) else [keywords]
-        keyword_should_conditions = []
+    # Add keyword and search_keyword filters
+    if keywords or search_keyword:
+        must_conditions_inner = []
         
-        # Tentukan field yang akan digunakan berdasarkan case_sensitive
-        caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-        issue_field = "issue.keyword" if case_sensitive else "issue"
+        # Handle regular keywords
+        if keywords:
+            # Konversi keywords ke list jika belum
+            keyword_list = keywords if isinstance(keywords, list) else [keywords]
+            keyword_should_conditions = []
+            
+            # Tentukan field yang akan digunakan berdasarkan case_sensitive
+            caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
+            issue_field = "issue.keyword" if case_sensitive else "issue"
+            
+            if search_exact_phrases:
+                # Gunakan match_phrase untuk exact matching
+                for kw in keyword_list:
+                    keyword_should_conditions.extend([
+                        {"match_phrase": {caption_field: kw}},
+                        {"match_phrase": {issue_field: kw}}
+                    ])
+            else:
+                # Gunakan match dengan operator AND
+                for kw in keyword_list:
+                    keyword_should_conditions.extend([
+                        {"match": {caption_field: {"query": kw, "operator": "AND"}}},
+                        {"match": {issue_field: {"query": kw, "operator": "AND"}}}
+                    ])
+            
+            must_conditions_inner.append({
+                "bool": {
+                    "should": keyword_should_conditions,
+                    "minimum_should_match": 1
+                }
+            })
         
-        if search_exact_phrases:
-            # Gunakan match_phrase untuk exact matching
-            for kw in keyword_list:
-                keyword_should_conditions.append({"match_phrase": {caption_field: kw}})
-                keyword_should_conditions.append({"match_phrase": {issue_field: kw}})
-        else:
-            # Gunakan match dengan operator AND
-            for kw in keyword_list:
-                keyword_should_conditions.append({"match": {caption_field: {"query": kw, "operator": "AND"}}})
-                keyword_should_conditions.append({"match": {issue_field: {"query": kw, "operator": "AND"}}})
+        # Handle search_keyword with same logic as keywords
+        if search_keyword:
+            # Konversi search_keyword ke list jika belum
+            search_keyword_list = search_keyword if isinstance(search_keyword, list) else [search_keyword]
+            search_keyword_should_conditions = []
+            
+            # Tentukan field yang akan digunakan berdasarkan case_sensitive
+            caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
+            issue_field = "issue.keyword" if case_sensitive else "issue"
+            
+            if search_exact_phrases:
+                # Gunakan match_phrase untuk exact matching
+                for sk in search_keyword_list:
+                    search_keyword_should_conditions.extend([
+                        {"match_phrase": {caption_field: sk}},
+                        {"match_phrase": {issue_field: sk}}
+                    ])
+            else:
+                # Gunakan match dengan operator AND
+                for sk in search_keyword_list:
+                    search_keyword_should_conditions.extend([
+                        {"match": {caption_field: {"query": sk, "operator": "AND"}}},
+                        {"match": {issue_field: {"query": sk, "operator": "AND"}}}
+                    ])
+            
+            must_conditions_inner.append({
+                "bool": {
+                    "should": search_keyword_should_conditions,
+                    "minimum_should_match": 1
+                }
+            })
         
-        keyword_condition = {
+        # Add the combined conditions to must_conditions
+        must_conditions.append({
             "bool": {
-                "should": keyword_should_conditions,
-                "minimum_should_match": 1
+                "must": must_conditions_inner
             }
-        }
-        must_conditions.append(keyword_condition)
-    
+        })
     # Bangun filter untuk query
     filter_conditions = []
     
@@ -339,6 +386,9 @@ def get_trending_links(
             aggs_query["query"]["bool"]["filter"] = filter_conditions
             
         try:
+
+            import json
+            print(json.dumps(aggs_query, indent=2))
             # Try the aggregation approach
             print("Trying aggregation approach...")
             response = es.search(

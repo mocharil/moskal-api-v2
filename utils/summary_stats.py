@@ -22,6 +22,7 @@ def get_stats_summary(
     verify_certs=False,
     ca_certs=None,
     keywords=None,
+    search_keyword=None,
     search_exact_phrases=False,
     case_sensitive=False,
     sentiment=None,
@@ -49,6 +50,7 @@ def get_stats_summary(
         verify_certs=False,
         ca_certs=None,
         keywords=None,
+        search_keyword=None,
         search_exact_phrases=False,
         case_sensitive=False,
         sentiment=None,
@@ -88,8 +90,8 @@ def get_stats_summary(
     
     # Definisikan kategori channels
     default_non_social_channels = ["news"]
-    default_social_media_channels = ["twitter", "linkedin", "reddit"]
-    default_video_channels = ["youtube"]
+    default_social_media_channels = ["twitter", "linkedin","youtube", "reddit","tiktok", "instagram", "facebook"]
+    default_video_channels = ["youtube","tiktok"]
     default_all_channels = default_non_social_channels + default_social_media_channels + default_video_channels
     
     # Mapping channel ke index Elasticsearch
@@ -163,35 +165,80 @@ def get_stats_summary(
             }
         ]
         
-        # Tambahkan filter keywords jika ada
-        if keywords:
-            # Konversi keywords ke list jika belum
-            keyword_list = keywords if isinstance(keywords, list) else [keywords]
-            keyword_should_conditions = []
+        # Add keyword and search_keyword filters
+        if keywords or search_keyword:
+            must_conditions_inner = []
             
-            # Tentukan field yang akan digunakan berdasarkan case_sensitive
-            caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-            issue_field = "issue.keyword" if case_sensitive else "issue"
+            # Handle regular keywords
+            if keywords:
+                # Konversi keywords ke list jika belum
+                keyword_list = keywords if isinstance(keywords, list) else [keywords]
+                keyword_should_conditions = []
+                
+                # Tentukan field yang akan digunakan berdasarkan case_sensitive
+                caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
+                issue_field = "issue.keyword" if case_sensitive else "issue"
+                
+                if search_exact_phrases:
+                    # Gunakan match_phrase untuk exact matching
+                    for kw in keyword_list:
+                        keyword_should_conditions.extend([
+                            {"match_phrase": {caption_field: kw}},
+                            {"match_phrase": {issue_field: kw}}
+                        ])
+                else:
+                    # Gunakan match dengan operator AND
+                    for kw in keyword_list:
+                        keyword_should_conditions.extend([
+                            {"match": {caption_field: {"query": kw, "operator": "AND"}}},
+                            {"match": {issue_field: {"query": kw, "operator": "AND"}}}
+                        ])
+                
+                must_conditions_inner.append({
+                    "bool": {
+                        "should": keyword_should_conditions,
+                        "minimum_should_match": 1
+                    }
+                })
             
-            if search_exact_phrases:
-                # Gunakan match_phrase untuk exact matching
-                for kw in keyword_list:
-                    keyword_should_conditions.append({"match_phrase": {caption_field: kw}})
-                    keyword_should_conditions.append({"match_phrase": {issue_field: kw}})
-            else:
-                # Gunakan match dengan operator AND
-                for kw in keyword_list:
-                    keyword_should_conditions.append({"match": {caption_field: {"query": kw, "operator": "AND"}}})
-                    keyword_should_conditions.append({"match": {issue_field: {"query": kw, "operator": "AND"}}})
+            # Handle search_keyword with same logic as keywords
+            if search_keyword:
+                # Konversi search_keyword ke list jika belum
+                search_keyword_list = search_keyword if isinstance(search_keyword, list) else [search_keyword]
+                search_keyword_should_conditions = []
+                
+                # Tentukan field yang akan digunakan berdasarkan case_sensitive
+                caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
+                issue_field = "issue.keyword" if case_sensitive else "issue"
+                
+                if search_exact_phrases:
+                    # Gunakan match_phrase untuk exact matching
+                    for sk in search_keyword_list:
+                        search_keyword_should_conditions.extend([
+                            {"match_phrase": {caption_field: sk}},
+                            {"match_phrase": {issue_field: sk}}
+                        ])
+                else:
+                    # Gunakan match dengan operator AND
+                    for sk in search_keyword_list:
+                        search_keyword_should_conditions.extend([
+                            {"match": {caption_field: {"query": sk, "operator": "AND"}}},
+                            {"match": {issue_field: {"query": sk, "operator": "AND"}}}
+                        ])
+                
+                must_conditions_inner.append({
+                    "bool": {
+                        "should": search_keyword_should_conditions,
+                        "minimum_should_match": 1
+                    }
+                })
             
-            keyword_condition = {
+            # Add the combined conditions to must_conditions
+            must_conditions.append({
                 "bool": {
-                    "should": keyword_should_conditions,
-                    "minimum_should_match": 1
+                    "must": must_conditions_inner
                 }
-            }
-            must_conditions.append(keyword_condition)
-        
+            })
         # Bangun filter untuk query
         filter_conditions = []
         
@@ -339,12 +386,15 @@ def get_stats_summary(
                 "sum": {
                     "script": {
                         "source": """
-                        int shares = 0;
+                        long shares = 0;
                         if (doc.containsKey('shares') && doc['shares'].value != null) {
                             shares += doc['shares'].value;
                         }
                         if (doc.containsKey('retweets') && doc['retweets'].value != null) {
                             shares += doc['retweets'].value;
+                        }
+                        if (doc.containsKey('reposts') && doc['reposts'].value != null) {
+                            shares += doc['reposts'].value;
                         }
                         return shares;
                         """
@@ -421,204 +471,208 @@ def get_stats_summary(
         else:
             return "0%"
     
-    try:
-        # === Bangun query untuk periode saat ini ===
-        current_base_query = build_base_query(start_date, end_date)
-        current_metrics_query = build_metrics_query(current_base_query)
-        current_video_query = build_video_query(current_metrics_query)
+    
+    # === Bangun query untuk periode saat ini ===
+    current_base_query = build_base_query(start_date, end_date)
+    current_metrics_query = build_metrics_query(current_base_query)
+    current_video_query = build_video_query(current_metrics_query)
+    
+
+
+    # import json
+    print(json.dumps(current_metrics_query, indent=2))
+    # === Bangun query untuk periode sebelumnya (jika perlu) ===
+    previous_results = {}
+    if compare_with_previous:
+        previous_base_query = build_base_query(previous_start_str, previous_end_str)
+        previous_metrics_query = build_metrics_query(previous_base_query)
+        previous_video_query = build_video_query(previous_metrics_query)
+    
+    # === QUERY UNTUK NON-SOCIAL MEDIA ===
+    if non_social_indices:
+        # Current period
+
+        current_non_social_response = es.search(
+            index=",".join(non_social_indices),
+            body=current_metrics_query
+        )
         
-        # === Bangun query untuk periode sebelumnya (jika perlu) ===
-        previous_results = {}
-        if compare_with_previous:
-            previous_base_query = build_base_query(previous_start_str, previous_end_str)
-            previous_metrics_query = build_metrics_query(previous_base_query)
-            previous_video_query = build_video_query(previous_metrics_query)
+        current_non_social_mentions = current_non_social_response["aggregations"]["total_mentions"]["value"]
+        current_non_social_time_series = [{
+            "date": bucket["key_as_string"],
+            "value": bucket["doc_count"]
+        } for bucket in current_non_social_response["aggregations"]["time_series"]["buckets"]]
         
-        # === QUERY UNTUK NON-SOCIAL MEDIA ===
-        if non_social_indices:
-            # Current period
-  
-            current_non_social_response = es.search(
+        # Previous period (if needed)
+        previous_non_social_mentions = 0
+
+        if compare_with_previous and non_social_indices:
+            previous_non_social_response = es.search(
                 index=",".join(non_social_indices),
-                body=current_metrics_query
+                body=previous_metrics_query
             )
-            
-            current_non_social_mentions = current_non_social_response["aggregations"]["total_mentions"]["value"]
-            current_non_social_time_series = [{
-                "date": bucket["key_as_string"],
-                "value": bucket["doc_count"]
-            } for bucket in current_non_social_response["aggregations"]["time_series"]["buckets"]]
-            
-            # Previous period (if needed)
-            previous_non_social_mentions = 0
-   
-            if compare_with_previous and non_social_indices:
-                previous_non_social_response = es.search(
-                    index=",".join(non_social_indices),
-                    body=previous_metrics_query
-                )
-                previous_non_social_mentions = previous_non_social_response["aggregations"]["total_mentions"]["value"]
-        else:
-            current_non_social_mentions = 0
-            current_non_social_time_series = []
-            previous_non_social_mentions = 0
+            previous_non_social_mentions = previous_non_social_response["aggregations"]["total_mentions"]["value"]
+    else:
+        current_non_social_mentions = 0
+        current_non_social_time_series = []
+        previous_non_social_mentions = 0
+    
+    # === QUERY UNTUK SOCIAL MEDIA ===
+    if social_media_indices:
+        # Current period
+        current_social_response = es.search(
+            index=",".join(social_media_indices),
+            body=current_metrics_query
+        )
         
-        # === QUERY UNTUK SOCIAL MEDIA ===
-        if social_media_indices:
-            # Current period
-            current_social_response = es.search(
+        current_social_mentions = current_social_response["aggregations"]["total_mentions"]["value"]
+        current_social_likes = current_social_response["aggregations"]["total_likes"]["value"]
+        current_social_shares = current_social_response["aggregations"]["total_shares"]["value"]
+        current_social_time_series = [{
+            "date": bucket["key_as_string"],
+            "value": bucket["doc_count"]
+        } for bucket in current_social_response["aggregations"]["time_series"]["buckets"]]
+        
+        # Previous period (if needed)
+        previous_social_mentions = 0
+        previous_social_likes = 0
+        previous_social_shares = 0
+        if compare_with_previous and social_media_indices:
+            previous_social_response = es.search(
                 index=",".join(social_media_indices),
-                body=current_metrics_query
+                body=previous_metrics_query
             )
-            
-            current_social_mentions = current_social_response["aggregations"]["total_mentions"]["value"]
-            current_social_likes = current_social_response["aggregations"]["total_likes"]["value"]
-            current_social_shares = current_social_response["aggregations"]["total_shares"]["value"]
-            current_social_time_series = [{
-                "date": bucket["key_as_string"],
-                "value": bucket["doc_count"]
-            } for bucket in current_social_response["aggregations"]["time_series"]["buckets"]]
-            
-            # Previous period (if needed)
-            previous_social_mentions = 0
-            previous_social_likes = 0
-            previous_social_shares = 0
-            if compare_with_previous and social_media_indices:
-                previous_social_response = es.search(
-                    index=",".join(social_media_indices),
-                    body=previous_metrics_query
-                )
-                previous_social_mentions = previous_social_response["aggregations"]["total_mentions"]["value"]
-                previous_social_likes = previous_social_response["aggregations"]["total_likes"]["value"]
-                previous_social_shares = previous_social_response["aggregations"]["total_shares"]["value"]
-        else:
-            current_social_mentions = 0
-            current_social_likes = 0
-            current_social_shares = 0
-            current_social_time_series = []
-            previous_social_mentions = 0
-            previous_social_likes = 0
-            previous_social_shares = 0
+            previous_social_mentions = previous_social_response["aggregations"]["total_mentions"]["value"]
+            previous_social_likes = previous_social_response["aggregations"]["total_likes"]["value"]
+            previous_social_shares = previous_social_response["aggregations"]["total_shares"]["value"]
+    else:
+        current_social_mentions = 0
+        current_social_likes = 0
+        current_social_shares = 0
+        current_social_time_series = []
+        previous_social_mentions = 0
+        previous_social_likes = 0
+        previous_social_shares = 0
+    
+    # === QUERY UNTUK VIDEO ===
+    if video_indices:
+        # Current period
+        current_video_response = es.search(
+            index=",".join(video_indices),
+            body=current_video_query
+        )
         
-        # === QUERY UNTUK VIDEO ===
-        if video_indices:
-            # Current period
-            current_video_response = es.search(
+        current_video_mentions = current_video_response["aggregations"]["total_mentions"]["value"]
+        current_video_time_series = [{
+            "date": bucket["key_as_string"],
+            "value": bucket["doc_count"]
+        } for bucket in current_video_response["aggregations"]["time_series"]["buckets"]]
+        
+        # Previous period (if needed)
+        previous_video_mentions = 0
+        if compare_with_previous and video_indices:
+            previous_video_response = es.search(
                 index=",".join(video_indices),
-                body=current_video_query
+                body=previous_video_query
             )
-            
-            current_video_mentions = current_video_response["aggregations"]["total_mentions"]["value"]
-            current_video_time_series = [{
-                "date": bucket["key_as_string"],
-                "value": bucket["doc_count"]
-            } for bucket in current_video_response["aggregations"]["time_series"]["buckets"]]
-            
-            # Previous period (if needed)
-            previous_video_mentions = 0
-            if compare_with_previous and video_indices:
-                previous_video_response = es.search(
-                    index=",".join(video_indices),
-                    body=previous_video_query
-                )
-                previous_video_mentions = previous_video_response["aggregations"]["total_mentions"]["value"]
-        else:
-            current_video_mentions = 0
-            current_video_time_series = []
-            previous_video_mentions = 0
-        
-        # === HITUNG GROWTH ===
-        non_social_mentions_data = calculate_growth(current_non_social_mentions, previous_non_social_mentions)
-        social_media_mentions_data = calculate_growth(current_social_mentions, previous_social_mentions)
-        video_mentions_data = calculate_growth(current_video_mentions, previous_video_mentions)
-        social_media_shares_data = calculate_growth(current_social_shares, previous_social_shares)
-        social_media_likes_data = calculate_growth(current_social_likes, previous_social_likes)
-        
-        # === MEMBUAT HASIL ===
-        result = {
-            "non_social_mentions": non_social_mentions_data,
-            "social_media_mentions": social_media_mentions_data,
-            "video_mentions": video_mentions_data,
-            "social_media_shares": social_media_shares_data,
-            "social_media_likes": social_media_likes_data,
-            "period": {
-                "current": {
-                    "start_date": start_date,
-                    "end_date": end_date
-                },
-                "previous": {
-                    "start_date": previous_start_str,
-                    "end_date": previous_end_str
-                } if compare_with_previous else None
+            previous_video_mentions = previous_video_response["aggregations"]["total_mentions"]["value"]
+    else:
+        current_video_mentions = 0
+        current_video_time_series = []
+        previous_video_mentions = 0
+    
+    # === HITUNG GROWTH ===
+    non_social_mentions_data = calculate_growth(current_non_social_mentions, previous_non_social_mentions)
+    social_media_mentions_data = calculate_growth(current_social_mentions, previous_social_mentions)
+    video_mentions_data = calculate_growth(current_video_mentions, previous_video_mentions)
+    social_media_shares_data = calculate_growth(current_social_shares, previous_social_shares)
+    social_media_likes_data = calculate_growth(current_social_likes, previous_social_likes)
+    
+    # === MEMBUAT HASIL ===
+    result = {
+        "non_social_mentions": non_social_mentions_data,
+        "social_media_mentions": social_media_mentions_data,
+        "video_mentions": video_mentions_data,
+        "social_media_shares": social_media_shares_data,
+        "social_media_likes": social_media_likes_data,
+        "period": {
+            "current": {
+                "start_date": start_date,
+                "end_date": end_date
             },
-            "time_series": {
-                "non_social_mentions": current_non_social_time_series,
-                "social_media_mentions": current_social_time_series,
-                "video_mentions": current_video_time_series,
-                "social_media_shares": [],  # Would need additional aggregation for this
-                "social_media_likes": []    # Would need additional aggregation for this
-            }
+            "previous": {
+                "start_date": previous_start_str,
+                "end_date": previous_end_str
+            } if compare_with_previous else None
+        },
+        "time_series": {
+            "non_social_mentions": current_non_social_time_series,
+            "social_media_mentions": current_social_time_series,
+            "video_mentions": current_video_time_series,
+            "social_media_shares": [],  # Would need additional aggregation for this
+            "social_media_likes": []    # Would need additional aggregation for this
         }
-        redis_client.set_with_ttl(cache_key, result, ttl_seconds=100)
-        return result
+    }
+    redis_client.set_with_ttl(cache_key, result, ttl_seconds=100)
+    return result
         
-    except Exception as e:
-        print(f"Error querying Elasticsearch: {e}")
-        # Return empty result with all required keys
-        return {
-            "non_social_mentions": {
-                "value": 0,
-                "display": "0",
-                "growth": None,
-                "growth_display": "N/A",
-                "growth_percentage": None,
-                "growth_percentage_display": "N/A"
-            },
-            "social_media_mentions": {
-                "value": 0,
-                "display": "0",
-                "growth": None,
-                "growth_display": "N/A",
-                "growth_percentage": None,
-                "growth_percentage_display": "N/A"
-            },
-            "video_mentions": {
-                "value": 0,
-                "display": "0",
-                "growth": None,
-                "growth_display": "N/A",
-                "growth_percentage": None,
-                "growth_percentage_display": "N/A"
-            },
-            "social_media_shares": {
-                "value": 0,
-                "display": "0",
-                "growth": None,
-                "growth_display": "N/A",
-                "growth_percentage": None,
-                "growth_percentage_display": "N/A"
-            },
-            "social_media_likes": {
-                "value": 0,
-                "display": "0",
-                "growth": None,
-                "growth_display": "N/A",
-                "growth_percentage": None,
-                "growth_percentage_display": "N/A"
-            },
-            "period": {
-                "current": {
-                    "start_date": start_date,
-                    "end_date": end_date
-                },
-                "previous": None
-            },
-            "time_series": {
-                "non_social_mentions": [],
-                "social_media_mentions": [],
-                "video_mentions": [],
-                "social_media_shares": [],
-                "social_media_likes": []
-            },
-            "error": str(e)
-        }
+    # except Exception as e:
+    #     print(f"Error querying Elasticsearch: {e}")
+    #     # Return empty result with all required keys
+    #     return {
+    #         "non_social_mentions": {
+    #             "value": 0,
+    #             "display": "0",
+    #             "growth": None,
+    #             "growth_display": "N/A",
+    #             "growth_percentage": None,
+    #             "growth_percentage_display": "N/A"
+    #         },
+    #         "social_media_mentions": {
+    #             "value": 0,
+    #             "display": "0",
+    #             "growth": None,
+    #             "growth_display": "N/A",
+    #             "growth_percentage": None,
+    #             "growth_percentage_display": "N/A"
+    #         },
+    #         "video_mentions": {
+    #             "value": 0,
+    #             "display": "0",
+    #             "growth": None,
+    #             "growth_display": "N/A",
+    #             "growth_percentage": None,
+    #             "growth_percentage_display": "N/A"
+    #         },
+    #         "social_media_shares": {
+    #             "value": 0,
+    #             "display": "0",
+    #             "growth": None,
+    #             "growth_display": "N/A",
+    #             "growth_percentage": None,
+    #             "growth_percentage_display": "N/A"
+    #         },
+    #         "social_media_likes": {
+    #             "value": 0,
+    #             "display": "0",
+    #             "growth": None,
+    #             "growth_display": "N/A",
+    #             "growth_percentage": None,
+    #             "growth_percentage_display": "N/A"
+    #         },
+    #         "period": {
+    #             "current": {
+    #                 "start_date": start_date,
+    #                 "end_date": end_date
+    #             },
+    #             "previous": None
+    #         },
+    #         "time_series": {
+    #             "non_social_mentions": [],
+    #             "social_media_mentions": [],
+    #             "video_mentions": [],
+    #             "social_media_shares": [],
+    #             "social_media_likes": []
+    #         },
+    #         "error": str(e)
+    #     }

@@ -58,6 +58,11 @@ class CommonParams(BaseModel):
         example=["prabowo", "gibran"],
         description="Keywords to search for"
     )
+    search_keyword: Optional[List[str]] = Field(
+        default=None,
+        example=["prabowo gibran"],
+        description="Search for exact phrases in addition to keywords"
+    )
     search_exact_phrases: bool = Field(
         default=False, 
         example=False,
@@ -869,4 +874,3 @@ def kol_overview_analysis(
         params_dict['channels'] = ['news' if ch == 'media' else ch for ch in params_dict['channels']]
 
     return search_kol(**params_dict)
-

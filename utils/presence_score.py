@@ -26,6 +26,7 @@ def get_presence_score(
     verify_certs=False,
     ca_certs=None,
     keywords=None,
+    search_keyword=None,
     search_exact_phrases=False,
     case_sensitive=False,
     start_date=None,
@@ -55,6 +56,7 @@ def get_presence_score(
         verify_certs=verify_certs,
         ca_certs=ca_certs,
         keywords=keywords,
+        search_keyword=search_keyword,
         search_exact_phrases=search_exact_phrases,
         case_sensitive=case_sensitive,
         sentiment=sentiment,
@@ -127,7 +129,7 @@ def get_presence_score(
         format_str = "yyyy-MM-dd"
     
     # Bangun query untuk mendapatkan presence score dari topik utama
-    def build_presence_score_query(topic_keywords=None):
+    def build_presence_score_query(keywords=None,search_keyword=None):
         must_conditions = [
             {
                 "range": {
@@ -139,35 +141,80 @@ def get_presence_score(
             }
         ]
         
-        # Tambahkan filter keywords jika ada
-        if topic_keywords:
-            # Konversi keywords ke list jika belum
-            keyword_list = topic_keywords if isinstance(topic_keywords, list) else [topic_keywords]
-            keyword_should_conditions = []
+        # Add keyword and search_keyword filters
+        if keywords or search_keyword:
+            must_conditions_inner = []
             
-            # Tentukan field yang akan digunakan berdasarkan case_sensitive
-            caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-            issue_field = "issue.keyword" if case_sensitive else "issue"
+            # Handle regular keywords
+            if keywords:
+                # Konversi keywords ke list jika belum
+                keyword_list = keywords if isinstance(keywords, list) else [keywords]
+                keyword_should_conditions = []
+                
+                # Tentukan field yang akan digunakan berdasarkan case_sensitive
+                caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
+                issue_field = "issue.keyword" if case_sensitive else "issue"
+                
+                if search_exact_phrases:
+                    # Gunakan match_phrase untuk exact matching
+                    for kw in keyword_list:
+                        keyword_should_conditions.extend([
+                            {"match_phrase": {caption_field: kw}},
+                            {"match_phrase": {issue_field: kw}}
+                        ])
+                else:
+                    # Gunakan match dengan operator AND
+                    for kw in keyword_list:
+                        keyword_should_conditions.extend([
+                            {"match": {caption_field: {"query": kw, "operator": "AND"}}},
+                            {"match": {issue_field: {"query": kw, "operator": "AND"}}}
+                        ])
+                
+                must_conditions_inner.append({
+                    "bool": {
+                        "should": keyword_should_conditions,
+                        "minimum_should_match": 1
+                    }
+                })
             
-            if search_exact_phrases:
-                # Gunakan match_phrase untuk exact matching
-                for kw in keyword_list:
-                    keyword_should_conditions.append({"match_phrase": {caption_field: kw}})
-                    keyword_should_conditions.append({"match_phrase": {issue_field: kw}})
-            else:
-                # Gunakan match dengan operator AND
-                for kw in keyword_list:
-                    keyword_should_conditions.append({"match": {caption_field: {"query": kw, "operator": "AND"}}})
-                    keyword_should_conditions.append({"match": {issue_field: {"query": kw, "operator": "AND"}}})
+            # Handle search_keyword with same logic as keywords
+            if search_keyword:
+                # Konversi search_keyword ke list jika belum
+                search_keyword_list = search_keyword if isinstance(search_keyword, list) else [search_keyword]
+                search_keyword_should_conditions = []
+                
+                # Tentukan field yang akan digunakan berdasarkan case_sensitive
+                caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
+                issue_field = "issue.keyword" if case_sensitive else "issue"
+                
+                if search_exact_phrases:
+                    # Gunakan match_phrase untuk exact matching
+                    for sk in search_keyword_list:
+                        search_keyword_should_conditions.extend([
+                            {"match_phrase": {caption_field: sk}},
+                            {"match_phrase": {issue_field: sk}}
+                        ])
+                else:
+                    # Gunakan match dengan operator AND
+                    for sk in search_keyword_list:
+                        search_keyword_should_conditions.extend([
+                            {"match": {caption_field: {"query": sk, "operator": "AND"}}},
+                            {"match": {issue_field: {"query": sk, "operator": "AND"}}}
+                        ])
+                
+                must_conditions_inner.append({
+                    "bool": {
+                        "should": search_keyword_should_conditions,
+                        "minimum_should_match": 1
+                    }
+                })
             
-            keyword_condition = {
+            # Add the combined conditions to must_conditions
+            must_conditions.append({
                 "bool": {
-                    "should": keyword_should_conditions,
-                    "minimum_should_match": 1
+                    "must": must_conditions_inner
                 }
-            }
-            must_conditions.append(keyword_condition)
-        
+            })
         # Bangun filter untuk query
         filter_conditions = []
         
@@ -311,7 +358,11 @@ def get_presence_score(
     
     try:
         # Jalankan query untuk topik utama
-        main_query = build_presence_score_query(keywords)
+        main_query = build_presence_score_query(keywords,search_keyword)
+
+        import json
+        print(json.dumps(main_query, indent=2))
+
         main_response = es.search(
             index=",".join(available_indices),
             body=main_query
@@ -336,50 +387,7 @@ def get_presence_score(
         # Bandingkan dengan topik lain jika diminta
         topics_comparison = []
         percentile = None
-        
-        if compare_with_topics and keywords:
-            # Dapatkan topik populer
-            popular_topics_query = build_popular_topics_query()
-            popular_topics_response = es.search(
-                index=",".join(available_indices),
-                body=popular_topics_query
-            )
-            
-            # Ambil significant terms
-            significant_buckets = popular_topics_response["aggregations"]["significant_topics"]["buckets"]
-            significant_terms = [bucket["key"] for bucket in significant_buckets]
-            
-            # Filter terms agar tidak memasukkan keyword utama
-            if isinstance(keywords, list):
-                other_topics = [term for term in significant_terms if not any(kw.lower() in term.lower() for kw in keywords)]
-            else:
-                other_topics = [term for term in significant_terms if keywords.lower() not in term.lower()]
-            
-            # Batasi jumlah topik
-            other_topics = other_topics[:num_topics_to_compare]
-            
-            # Dapatkan presence score untuk setiap topik
-            for topic in other_topics:
-                topic_query = build_presence_score_query([topic])
-                topic_response = es.search(
-                    index=",".join(available_indices),
-                    body=topic_query
-                )
-                
-                topic_average_presence = topic_response["aggregations"]["average_presence"]["value"] or 0
-                
-                topics_comparison.append({
-                    "topic": topic,
-                    "presence_score": topic_average_presence
-                })
-            
-            # Hitung persentil
-            if topics_comparison:
-                all_scores = [main_average_presence] + [topic["presence_score"] for topic in topics_comparison]
-                all_scores.sort()
-                main_index = all_scores.index(main_average_presence)
-                percentile = (main_index / len(all_scores)) * 100
-        
+
         # Buat hasil
         result = {
             "current_presence_score": main_average_presence,

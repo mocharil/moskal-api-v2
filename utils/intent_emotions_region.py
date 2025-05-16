@@ -336,7 +336,9 @@ def get_intents_emotions_region_share(
     query["query"]["bool"]["filter"].append(region_not_specified_filter)
     
     try:
- 
+
+        import json
+        print(json.dumps(query, indent=2))
         # Execute query
         response = es.search(
             index=",".join(indices),

@@ -71,6 +71,7 @@ def search_kol(   owner_id = None,
     verify_certs=False,
     ca_certs=None,
     keywords=None,
+    search_keyword=None,
     search_exact_phrases=False,
     case_sensitive=False,
     sentiment=None,
@@ -93,6 +94,7 @@ def search_kol(   owner_id = None,
         owner_id=owner_id,
         project_name=project_name,
         keywords=keywords,
+        search_keyword=search_keyword,
         search_exact_phrases=search_exact_phrases,
         case_sensitive=case_sensitive,
         start_date=start_date,
@@ -137,6 +139,7 @@ def search_kol(   owner_id = None,
             verify_certs=verify_certs,
             ca_certs=ca_certs,
             keywords=keywords,
+            search_keyword=search_keyword,
             search_exact_phrases=search_exact_phrases,
             case_sensitive=case_sensitive,
             sentiment=sentiment,
@@ -238,6 +241,9 @@ def search_kol(   owner_id = None,
                 }
             }
         }
+
+
+
 
         response = es.search(
             index="topic_cluster",

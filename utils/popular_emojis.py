@@ -54,6 +54,7 @@ def get_popular_emojis(
     verify_certs=False,
     ca_certs=None,
     keywords=None,
+    search_keyword=None,
     search_exact_phrases=False,
     case_sensitive=False,
     sentiment=None,
@@ -116,7 +117,7 @@ def get_popular_emojis(
             source= ["channel",
                     "link_post",
                     "post_created_at",
-                        "post_caption"],
+                    "post_caption"],
             page_size=10000,
             es_host=es_host,    
             es_username=es_username,
@@ -125,6 +126,7 @@ def get_popular_emojis(
             verify_certs=verify_certs,
             ca_certs=ca_certs,
             keywords=keywords,
+            search_keyword=search_keyword,
             search_exact_phrases=search_exact_phrases,
             case_sensitive=case_sensitive,
             sentiment=sentiment,
@@ -173,16 +175,8 @@ def get_popular_emojis(
             {"emoji": emoji, "total_mentions": count}
             for emoji, count in emoji_counts.items()
         ]
-        
         # Urutkan berdasarkan jumlah mentions
         emoji_data.sort(key=lambda x: x["total_mentions"], reverse=True)
-        
-        # Batasi jumlah emoji jika diperlukan
-        if limit and len(emoji_data) > limit:
-            emoji_data = emoji_data[:limit]
-        
-            
-        
         # Buat hasil dengan informasi pagination
         result = {
             "data": emoji_data[:20],

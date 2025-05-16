@@ -93,6 +93,7 @@ def get_date_range(date_filter="last 30 days", custom_start_date=None, custom_en
 
 def build_elasticsearch_query(
     keywords=None,
+    search_keyword=None,
     search_exact_phrases=False,
     case_sensitive=False,
     sentiment=None,
@@ -117,6 +118,8 @@ def build_elasticsearch_query(
     -----------
     keywords : list, optional
         List of keywords to filter (will search in both post_caption and issue fields)
+    search_keyword : list, optional
+        List of keywords to search as exact phrases or with AND operator based on search_exact_phrases
     search_exact_phrases : bool, optional
         If True, use match_phrase for keyword search, if False use match with AND operator
     case_sensitive : bool, optional
@@ -182,42 +185,80 @@ def build_elasticsearch_query(
         }
     }
     
-    # Add keyword filter - search in both post_caption and issue fields
-    if keywords:
-        keyword_should_conditions = []
+    # Add keyword and search_keyword filters
+    if keywords or search_keyword:
+        must_conditions = []
         
-        # Ensure keywords is a list
-        if not isinstance(keywords, list):
-            keywords = [keywords]
-        
-        # Tentukan field yang akan digunakan berdasarkan case_sensitive
-        caption_field_to_use = f"{caption_field}.keyword" if case_sensitive else caption_field
-        issue_field_to_use = f"{issue_field}.keyword" if case_sensitive else issue_field
-        
-        if search_exact_phrases:
-            # Add match_phrase for each keyword in post_caption
-            for kw in keywords:
-                keyword_should_conditions.append({"match_phrase": {caption_field_to_use: kw}})
+        # Handle regular keywords
+        if keywords:
+            if not isinstance(keywords, list):
+                keywords = [keywords]
+                
+            caption_field_to_use = f"{caption_field}.keyword" if case_sensitive else caption_field
+            issue_field_to_use = f"{issue_field}.keyword" if case_sensitive else issue_field
             
-            # Add match_phrase for each keyword in issue
-            for kw in keywords:
-                keyword_should_conditions.append({"match_phrase": {issue_field_to_use: kw}})
-        else:
-            # Add match with AND operator for each keyword in post_caption
-            for kw in keywords:
-                keyword_should_conditions.append({"match": {caption_field_to_use: {"query": kw, "operator": "AND"}}})
+            keyword_should_conditions = []
             
-            # Add match with AND operator for each keyword in issue
-            for kw in keywords:
-                keyword_should_conditions.append({"match": {issue_field_to_use: {"query": kw, "operator": "AND"}}})
+            if search_exact_phrases:
+                # Add match_phrase for each keyword in post_caption and issue
+                for kw in keywords:
+                    keyword_should_conditions.extend([
+                        {"match_phrase": {caption_field_to_use: kw}},
+                        {"match_phrase": {issue_field_to_use: kw}}
+                    ])
+            else:
+                # Add match with AND operator for each keyword in post_caption and issue
+                for kw in keywords:
+                    keyword_should_conditions.extend([
+                        {"match": {caption_field_to_use: {"query": kw, "operator": "AND"}}},
+                        {"match": {issue_field_to_use: {"query": kw, "operator": "AND"}}}
+                    ])
+            
+            must_conditions.append({
+                "bool": {
+                    "should": keyword_should_conditions,
+                    "minimum_should_match": 1
+                }
+            })
         
-        keyword_filter = {
+        # Handle search_keyword with same logic as keywords
+        if search_keyword:
+            if not isinstance(search_keyword, list):
+                search_keyword = [search_keyword]
+                
+            caption_field_to_use = f"{caption_field}.keyword" if case_sensitive else caption_field
+            issue_field_to_use = f"{issue_field}.keyword" if case_sensitive else issue_field
+            
+            search_keyword_should_conditions = []
+            
+            if search_exact_phrases:
+                # Add match_phrase for each search_keyword in post_caption and issue
+                for sk in search_keyword:
+                    search_keyword_should_conditions.extend([
+                        {"match_phrase": {caption_field_to_use: sk}},
+                        {"match_phrase": {issue_field_to_use: sk}}
+                    ])
+            else:
+                # Add match with AND operator for each search_keyword in post_caption and issue
+                for sk in search_keyword:
+                    search_keyword_should_conditions.extend([
+                        {"match": {caption_field_to_use: {"query": sk, "operator": "AND"}}},
+                        {"match": {issue_field_to_use: {"query": sk, "operator": "AND"}}}
+                    ])
+            
+            must_conditions.append({
+                "bool": {
+                    "should": search_keyword_should_conditions,
+                    "minimum_should_match": 1
+                }
+            })
+        
+        # Add the combined filter to the main query
+        query["query"]["bool"]["must"].append({
             "bool": {
-                "should": keyword_should_conditions,
-                "minimum_should_match": 1
+                "must": must_conditions
             }
-        }
-        query["query"]["bool"]["filter"].append(keyword_filter)
+        })
     
     # Add sentiment filter
     if sentiment:

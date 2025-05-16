@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Dict, List, Literal, Optional, Union
-
+import json
 # Import utilitas dari paket utils
 from utils.es_client import get_elasticsearch_client
 from utils.es_query_builder import (
@@ -19,6 +19,7 @@ def get_keyword_trends(
     verify_certs=False,
     ca_certs=None,
     keywords=None,
+    search_keyword=None,
     search_exact_phrases=False,
     case_sensitive=False,
     sentiment=None,
@@ -46,6 +47,7 @@ def get_keyword_trends(
         verify_certs=verify_certs,
         ca_certs=ca_certs,
         keywords=keywords,
+        search_keyword=search_keyword,
         search_exact_phrases=search_exact_phrases,
         case_sensitive=case_sensitive,
         sentiment=sentiment,
@@ -120,34 +122,80 @@ def get_keyword_trends(
         }
     ]
     
-    # Tambahkan filter keywords jika ada
-    if keywords:
-        # Konversi keywords ke list jika belum
-        keyword_list = keywords if isinstance(keywords, list) else [keywords]
-        keyword_should_conditions = []
+    # Add keyword and search_keyword filters
+    if keywords or search_keyword:
+        must_conditions_inner = []
         
-        # Tentukan field yang akan digunakan berdasarkan case_sensitive
-        caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-        issue_field = "issue.keyword" if case_sensitive else "issue"
+        # Handle regular keywords
+        if keywords:
+            # Konversi keywords ke list jika belum
+            keyword_list = keywords if isinstance(keywords, list) else [keywords]
+            keyword_should_conditions = []
+            
+            # Tentukan field yang akan digunakan berdasarkan case_sensitive
+            caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
+            issue_field = "issue.keyword" if case_sensitive else "issue"
+            
+            if search_exact_phrases:
+                # Gunakan match_phrase untuk exact matching
+                for kw in keyword_list:
+                    keyword_should_conditions.extend([
+                        {"match_phrase": {caption_field: kw}},
+                        {"match_phrase": {issue_field: kw}}
+                    ])
+            else:
+                # Gunakan match dengan operator AND
+                for kw in keyword_list:
+                    keyword_should_conditions.extend([
+                        {"match": {caption_field: {"query": kw, "operator": "AND"}}},
+                        {"match": {issue_field: {"query": kw, "operator": "AND"}}}
+                    ])
+            
+            must_conditions_inner.append({
+                "bool": {
+                    "should": keyword_should_conditions,
+                    "minimum_should_match": 1
+                }
+            })
         
-        if search_exact_phrases:
-            # Gunakan match_phrase untuk exact matching
-            for kw in keyword_list:
-                keyword_should_conditions.append({"match_phrase": {caption_field: kw}})
-                keyword_should_conditions.append({"match_phrase": {issue_field: kw}})
-        else:
-            # Gunakan match dengan operator AND
-            for kw in keyword_list:
-                keyword_should_conditions.append({"match": {caption_field: {"query": kw, "operator": "AND"}}})
-                keyword_should_conditions.append({"match": {issue_field: {"query": kw, "operator": "AND"}}})
+        # Handle search_keyword with same logic as keywords
+        if search_keyword:
+            # Konversi search_keyword ke list jika belum
+            search_keyword_list = search_keyword if isinstance(search_keyword, list) else [search_keyword]
+            search_keyword_should_conditions = []
+            
+            # Tentukan field yang akan digunakan berdasarkan case_sensitive
+            caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
+            issue_field = "issue.keyword" if case_sensitive else "issue"
+            
+            if search_exact_phrases:
+                # Gunakan match_phrase untuk exact matching
+                for sk in search_keyword_list:
+                    search_keyword_should_conditions.extend([
+                        {"match_phrase": {caption_field: sk}},
+                        {"match_phrase": {issue_field: sk}}
+                    ])
+            else:
+                # Gunakan match dengan operator AND
+                for sk in search_keyword_list:
+                    search_keyword_should_conditions.extend([
+                        {"match": {caption_field: {"query": sk, "operator": "AND"}}},
+                        {"match": {issue_field: {"query": sk, "operator": "AND"}}}
+                    ])
+            
+            must_conditions_inner.append({
+                "bool": {
+                    "should": search_keyword_should_conditions,
+                    "minimum_should_match": 1
+                }
+            })
         
-        keyword_condition = {
+        # Add the combined conditions to must_conditions
+        must_conditions.append({
             "bool": {
-                "should": keyword_should_conditions,
-                "minimum_should_match": 1
+                "must": must_conditions_inner
             }
-        }
-        must_conditions.append(keyword_condition)
+        })
     
     # Bangun filter untuk query
     filter_conditions = []
@@ -239,8 +287,12 @@ def get_keyword_trends(
     # Add time series aggregation
     query = add_time_series_aggregation(query)
     
+
     # Execute query
     try:
+
+        import json
+        print(json.dumps(query, indent=2))
         response = es.search(
             index=",".join(indices),
             body=query
