@@ -1,19 +1,12 @@
-"""
-stats_summary.py - Script untuk mendapatkan ringkasan statistik dari data Elasticsearch
-
-Script ini menganalisis data dari Elasticsearch untuk membuat ringkasan statistik
-yang menunjukkan jumlah mentions di berbagai kategori seperti non-social media,
-social media, video, shares, dan likes, beserta pertumbuhan/perubahannya.
-"""
-
 import json
 from datetime import datetime, timedelta
-from typing import Dict, List, Literal, Optional, Union
+from typing import Dict
 
 # Import utilitas dari paket utils
 from utils.es_client import get_elasticsearch_client
 from utils.es_query_builder import get_date_range
 from utils.redis_client import redis_client
+
 def get_stats_summary(
     es_host=None,
     es_username=None,
@@ -43,30 +36,30 @@ def get_stats_summary(
 
     cache_key = redis_client.generate_cache_key(
         "get_stats_summary",
-        es_host=None,
-        es_username=None,
-        es_password=None,
-        use_ssl=False,
-        verify_certs=False,
-        ca_certs=None,
-        keywords=None,
-        search_keyword=None,
-        search_exact_phrases=False,
-        case_sensitive=False,
-        sentiment=None,
-        start_date=None,
-        end_date=None,
-        date_filter="last 30 days",
-        custom_start_date=None,
-        custom_end_date=None,
-        channels=None,
-        importance="all mentions",
-        influence_score_min=None,
-        influence_score_max=None,
-        region=None,
-        language=None,
-        domain=None,
-        compare_with_previous=True
+        es_host=es_host,
+        es_username=es_username,
+        es_password=es_password,
+        use_ssl=use_ssl,
+        verify_certs=verify_certs,
+        ca_certs=ca_certs,
+        keywords=keywords,
+        search_keyword=search_keyword,
+        search_exact_phrases=search_exact_phrases,
+        case_sensitive=case_sensitive,
+        sentiment=sentiment,
+        start_date=start_date,
+        end_date=end_date,
+        date_filter=date_filter,
+        custom_start_date=custom_start_date,
+        custom_end_date=custom_end_date,
+        channels=channels,
+        importance=importance,
+        influence_score_min=influence_score_min,
+        influence_score_max=influence_score_max,
+        region=region,
+        language=language,
+        domain=domain,
+        compare_with_previous=compare_with_previous
     )
 
     # Try to get from cache first
@@ -92,7 +85,7 @@ def get_stats_summary(
     default_non_social_channels = ["news"]
     default_social_media_channels = ["twitter", "linkedin","youtube", "reddit","tiktok", "instagram", "facebook"]
     default_video_channels = ["youtube","tiktok"]
-    default_all_channels = default_non_social_channels + default_social_media_channels + default_video_channels
+    default_all_channels = list(set(default_non_social_channels + default_social_media_channels + default_video_channels))
     
     # Mapping channel ke index Elasticsearch
     channel_to_index = {
@@ -171,78 +164,58 @@ def get_stats_summary(
             
             # Handle regular keywords
             if keywords:
-                # Konversi keywords ke list jika belum
                 keyword_list = keywords if isinstance(keywords, list) else [keywords]
                 keyword_should_conditions = []
-                
-                # Tentukan field yang akan digunakan berdasarkan case_sensitive
                 caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
                 issue_field = "issue.keyword" if case_sensitive else "issue"
-                
                 if search_exact_phrases:
-                    # Gunakan match_phrase untuk exact matching
                     for kw in keyword_list:
                         keyword_should_conditions.extend([
                             {"match_phrase": {caption_field: kw}},
                             {"match_phrase": {issue_field: kw}}
                         ])
                 else:
-                    # Gunakan match dengan operator AND
                     for kw in keyword_list:
                         keyword_should_conditions.extend([
                             {"match": {caption_field: {"query": kw, "operator": "AND"}}},
                             {"match": {issue_field: {"query": kw, "operator": "AND"}}}
                         ])
-                
                 must_conditions_inner.append({
                     "bool": {
                         "should": keyword_should_conditions,
                         "minimum_should_match": 1
                     }
                 })
-            
             # Handle search_keyword with same logic as keywords
             if search_keyword:
-                # Konversi search_keyword ke list jika belum
                 search_keyword_list = search_keyword if isinstance(search_keyword, list) else [search_keyword]
                 search_keyword_should_conditions = []
-                
-                # Tentukan field yang akan digunakan berdasarkan case_sensitive
                 caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
                 issue_field = "issue.keyword" if case_sensitive else "issue"
-                
                 if search_exact_phrases:
-                    # Gunakan match_phrase untuk exact matching
                     for sk in search_keyword_list:
                         search_keyword_should_conditions.extend([
                             {"match_phrase": {caption_field: sk}},
                             {"match_phrase": {issue_field: sk}}
                         ])
                 else:
-                    # Gunakan match dengan operator AND
                     for sk in search_keyword_list:
                         search_keyword_should_conditions.extend([
                             {"match": {caption_field: {"query": sk, "operator": "AND"}}},
                             {"match": {issue_field: {"query": sk, "operator": "AND"}}}
                         ])
-                
                 must_conditions_inner.append({
                     "bool": {
                         "should": search_keyword_should_conditions,
                         "minimum_should_match": 1
                     }
                 })
-            
-            # Add the combined conditions to must_conditions
             must_conditions.append({
                 "bool": {
                     "must": must_conditions_inner
                 }
             })
-        # Bangun filter untuk query
         filter_conditions = []
-        
-        # Filter untuk importance
         if importance == "important mentions":
             filter_conditions.append({
                 "range": {
@@ -251,8 +224,6 @@ def get_stats_summary(
                     }
                 }
             })
-            
-        # Filter untuk influence score
         if influence_score_min is not None or influence_score_max is not None:
             influence_condition = {"range": {"influence_score": {}}}
             if influence_score_min is not None:
@@ -260,15 +231,11 @@ def get_stats_summary(
             if influence_score_max is not None:
                 influence_condition["range"]["influence_score"]["lte"] = influence_score_max
             filter_conditions.append(influence_condition)
-            
-        # Filter untuk region menggunakan wildcard
         if region:
             region_conditions = []
             region_list = region if isinstance(region, list) else [region]
-            
             for r in region_list:
                 region_conditions.append({"wildcard": {"region": f"*{r}*"}})
-            
             region_filter = {
                 "bool": {
                     "should": region_conditions,
@@ -276,15 +243,11 @@ def get_stats_summary(
                 }
             }
             filter_conditions.append(region_filter)
-            
-        # Filter untuk language menggunakan wildcard
         if language:
             language_conditions = []
             language_list = language if isinstance(language, list) else [language]
-            
             for l in language_list:
                 language_conditions.append({"wildcard": {"language": f"*{l}*"}})
-            
             language_filter = {
                 "bool": {
                     "should": language_conditions,
@@ -292,8 +255,6 @@ def get_stats_summary(
                 }
             }
             filter_conditions.append(language_filter)
-            
-        # Filter untuk domain
         if domain:
             domain_condition = {
                 "bool": {
@@ -302,8 +263,6 @@ def get_stats_summary(
                 }
             }
             filter_conditions.append(domain_condition)
-        
-        # Filter untuk sentiment
         if sentiment:
             sentiment_condition = {
                 "terms": {
@@ -311,8 +270,6 @@ def get_stats_summary(
                 }
             }
             filter_conditions.append(sentiment_condition)
-        
-        # Gabungkan semua kondisi ke dalam query utama
         query = {
             "size": 0,
             "query": {
@@ -321,95 +278,100 @@ def get_stats_summary(
                 }
             }
         }
-        
-        # Tambahkan filter jika ada
         if filter_conditions:
             query["query"]["bool"]["filter"] = filter_conditions
-            
         return query
-    
+
     # Build query for video content that includes "video" in the link
     def build_video_query(query):
-        # Create a copy of the query
         video_query = json.loads(json.dumps(query))
-        
-        # Add condition for links that contain "video"
         video_condition = {
             "wildcard": {
                 "link_post": "*/*"
             }
         }
-        
-        # Add to must conditions
         if "filter" not in video_query["query"]["bool"]:
             video_query["query"]["bool"]["filter"] = []
-            
         video_query["query"]["bool"]["filter"].append(video_condition)
-        
         return video_query
-    
-    # Buat query untuk mendapatkan metrik
+
+    # Buat query untuk mendapatkan metrik dengan sub-agg likes & shares
     def build_metrics_query(base_query):
-        # Salin query dasar
         query = json.loads(json.dumps(base_query))
-        
-        # Tambahkan agregasi untuk metrik
         query["aggs"] = {
-            # Total mentions
             "total_mentions": {
                 "value_count": {
                     "field": "link_post"
                 }
             },
-            # Time series
             "time_series": {
                 "date_histogram": {
                     "field": "post_created_at",
                     "calendar_interval": "day",
                     "format": "yyyy-MM-dd"
+                },
+                "aggs": {
+                    "sum_likes": {
+                        "sum": {
+                            "field": "likes"
+                        }
+                    },
+                    "sum_shares": {
+                        "sum": {
+                            "script": {
+                                "source": """
+                                    long shares = 0;
+                                    if (doc.containsKey('shares') && !doc['shares'].empty) {
+                                        shares += doc['shares'].value;
+                                    }
+                                    if (doc.containsKey('retweets') && !doc['retweets'].empty) {
+                                        shares += doc['retweets'].value;
+                                    }
+                                    if (doc.containsKey('reposts') && !doc['reposts'].empty) {
+                                        shares += doc['reposts'].value;
+                                    }
+                                    return shares;
+                                """
+                            }
+                        }
+                    }
                 }
             },
-            # Likes/reactions
             "total_likes": {
                 "sum": {
                     "field": "likes"
                 }
             },
-            # Comments
             "total_comments": {
                 "sum": {
                     "field": "comments"
                 }
             },
-            # Shares
             "total_shares": {
                 "sum": {
                     "script": {
                         "source": """
-                        long shares = 0;
-                        if (doc.containsKey('shares') && doc['shares'].value != null) {
-                            shares += doc['shares'].value;
-                        }
-                        if (doc.containsKey('retweets') && doc['retweets'].value != null) {
-                            shares += doc['retweets'].value;
-                        }
-                        if (doc.containsKey('reposts') && doc['reposts'].value != null) {
-                            shares += doc['reposts'].value;
-                        }
-                        return shares;
+                            long shares = 0;
+                            if (doc.containsKey('shares') && !doc['shares'].empty) {
+                                shares += doc['shares'].value;
+                            }
+                            if (doc.containsKey('retweets') && !doc['retweets'].empty) {
+                                shares += doc['retweets'].value;
+                            }
+                            if (doc.containsKey('reposts') && !doc['reposts'].empty) {
+                                shares += doc['reposts'].value;
+                            }
+                            return shares;
                         """
                     }
                 }
             }
         }
-        
         return query
-    
+
     # Fungsi untuk menghitung growth
     def calculate_growth(current_value, previous_value):
         current_value = current_value or 0  # Convert None to 0
-        
-        # Default values
         result = {
             "value": current_value,
             "display": format_number(current_value),
@@ -418,71 +380,54 @@ def get_stats_summary(
             "growth_percentage": None,
             "growth_percentage_display": "N/A"
         }
-        
-        # Calculate growth if we have previous value
         if previous_value is not None and previous_value != 0:
             growth_value = current_value - previous_value
             growth_percentage = (growth_value / previous_value) * 100
-            
             result["growth"] = growth_value
             result["growth_display"] = format_growth(growth_value)
             result["growth_percentage"] = round(growth_percentage)
             result["growth_percentage_display"] = format_percentage(growth_percentage)
-        
         return result
-    
+
     # Format number to K, M format
     def format_number(value):
         if value is None:
             return "0"
-        
         value = float(value)  # Ensure it's a float for division
-        
         if value >= 1_000_000:
             return f"{value/1_000_000:.1f}M"
         elif value >= 1_000:
             return f"{value/1_000:.1f}K"
         else:
             return str(int(value))
-    
-    # Format growth number with sign
+
     def format_growth(value):
         if value is None:
             return "N/A"
-        
         formatted = format_number(abs(value))
-        
         if value > 0:
             return f"+{formatted}"
         elif value < 0:
             return f"-{formatted}"
         else:
             return "0"
-    
-    # Format percentage with sign
+
     def format_percentage(value):
         if value is None:
             return "N/A"
-        
         if value > 0:
             return f"+{round(value)}%"
         elif value < 0:
             return f"{round(value)}%"
         else:
             return "0%"
-    
-    
+
     # === Bangun query untuk periode saat ini ===
     current_base_query = build_base_query(start_date, end_date)
     current_metrics_query = build_metrics_query(current_base_query)
     current_video_query = build_video_query(current_metrics_query)
-    
 
-
-    # import json
-    print(json.dumps(current_metrics_query, indent=2))
     # === Bangun query untuk periode sebelumnya (jika perlu) ===
-    previous_results = {}
     if compare_with_previous:
         previous_base_query = build_base_query(previous_start_str, previous_end_str)
         previous_metrics_query = build_metrics_query(previous_base_query)
@@ -491,21 +436,17 @@ def get_stats_summary(
     # === QUERY UNTUK NON-SOCIAL MEDIA ===
     if non_social_indices:
         # Current period
-
         current_non_social_response = es.search(
             index=",".join(non_social_indices),
             body=current_metrics_query
         )
-        
         current_non_social_mentions = current_non_social_response["aggregations"]["total_mentions"]["value"]
         current_non_social_time_series = [{
             "date": bucket["key_as_string"],
             "value": bucket["doc_count"]
         } for bucket in current_non_social_response["aggregations"]["time_series"]["buckets"]]
-        
         # Previous period (if needed)
         previous_non_social_mentions = 0
-
         if compare_with_previous and non_social_indices:
             previous_non_social_response = es.search(
                 index=",".join(non_social_indices),
@@ -516,7 +457,7 @@ def get_stats_summary(
         current_non_social_mentions = 0
         current_non_social_time_series = []
         previous_non_social_mentions = 0
-    
+
     # === QUERY UNTUK SOCIAL MEDIA ===
     if social_media_indices:
         # Current period
@@ -524,15 +465,16 @@ def get_stats_summary(
             index=",".join(social_media_indices),
             body=current_metrics_query
         )
-        
         current_social_mentions = current_social_response["aggregations"]["total_mentions"]["value"]
         current_social_likes = current_social_response["aggregations"]["total_likes"]["value"]
         current_social_shares = current_social_response["aggregations"]["total_shares"]["value"]
+        # --- PATCH: likes & shares per bucket
         current_social_time_series = [{
             "date": bucket["key_as_string"],
-            "value": bucket["doc_count"]
+            "value": bucket["doc_count"],
+            "likes": bucket["sum_likes"]["value"],
+            "shares": bucket["sum_shares"]["value"]
         } for bucket in current_social_response["aggregations"]["time_series"]["buckets"]]
-        
         # Previous period (if needed)
         previous_social_mentions = 0
         previous_social_likes = 0
@@ -553,7 +495,7 @@ def get_stats_summary(
         previous_social_mentions = 0
         previous_social_likes = 0
         previous_social_shares = 0
-    
+
     # === QUERY UNTUK VIDEO ===
     if video_indices:
         # Current period
@@ -561,13 +503,11 @@ def get_stats_summary(
             index=",".join(video_indices),
             body=current_video_query
         )
-        
         current_video_mentions = current_video_response["aggregations"]["total_mentions"]["value"]
         current_video_time_series = [{
             "date": bucket["key_as_string"],
             "value": bucket["doc_count"]
         } for bucket in current_video_response["aggregations"]["time_series"]["buckets"]]
-        
         # Previous period (if needed)
         previous_video_mentions = 0
         if compare_with_previous and video_indices:
@@ -580,14 +520,14 @@ def get_stats_summary(
         current_video_mentions = 0
         current_video_time_series = []
         previous_video_mentions = 0
-    
+
     # === HITUNG GROWTH ===
     non_social_mentions_data = calculate_growth(current_non_social_mentions, previous_non_social_mentions)
     social_media_mentions_data = calculate_growth(current_social_mentions, previous_social_mentions)
     video_mentions_data = calculate_growth(current_video_mentions, previous_video_mentions)
     social_media_shares_data = calculate_growth(current_social_shares, previous_social_shares)
     social_media_likes_data = calculate_growth(current_social_likes, previous_social_likes)
-    
+
     # === MEMBUAT HASIL ===
     result = {
         "non_social_mentions": non_social_mentions_data,
@@ -609,70 +549,16 @@ def get_stats_summary(
             "non_social_mentions": current_non_social_time_series,
             "social_media_mentions": current_social_time_series,
             "video_mentions": current_video_time_series,
-            "social_media_shares": [],  # Would need additional aggregation for this
-            "social_media_likes": []    # Would need additional aggregation for this
+            # Tambahan array terpisah per tanggal
+            "social_media_shares": [
+                {"date": x["date"], "value": x["shares"]}
+                for x in current_social_time_series
+            ],
+            "social_media_likes": [
+                {"date": x["date"], "value": x["likes"]}
+                for x in current_social_time_series
+            ]
         }
     }
     redis_client.set_with_ttl(cache_key, result, ttl_seconds=100)
     return result
-        
-    # except Exception as e:
-    #     print(f"Error querying Elasticsearch: {e}")
-    #     # Return empty result with all required keys
-    #     return {
-    #         "non_social_mentions": {
-    #             "value": 0,
-    #             "display": "0",
-    #             "growth": None,
-    #             "growth_display": "N/A",
-    #             "growth_percentage": None,
-    #             "growth_percentage_display": "N/A"
-    #         },
-    #         "social_media_mentions": {
-    #             "value": 0,
-    #             "display": "0",
-    #             "growth": None,
-    #             "growth_display": "N/A",
-    #             "growth_percentage": None,
-    #             "growth_percentage_display": "N/A"
-    #         },
-    #         "video_mentions": {
-    #             "value": 0,
-    #             "display": "0",
-    #             "growth": None,
-    #             "growth_display": "N/A",
-    #             "growth_percentage": None,
-    #             "growth_percentage_display": "N/A"
-    #         },
-    #         "social_media_shares": {
-    #             "value": 0,
-    #             "display": "0",
-    #             "growth": None,
-    #             "growth_display": "N/A",
-    #             "growth_percentage": None,
-    #             "growth_percentage_display": "N/A"
-    #         },
-    #         "social_media_likes": {
-    #             "value": 0,
-    #             "display": "0",
-    #             "growth": None,
-    #             "growth_display": "N/A",
-    #             "growth_percentage": None,
-    #             "growth_percentage_display": "N/A"
-    #         },
-    #         "period": {
-    #             "current": {
-    #                 "start_date": start_date,
-    #                 "end_date": end_date
-    #             },
-    #             "previous": None
-    #         },
-    #         "time_series": {
-    #             "non_social_mentions": [],
-    #             "social_media_mentions": [],
-    #             "video_mentions": [],
-    #             "social_media_shares": [],
-    #             "social_media_likes": []
-    #         },
-    #         "error": str(e)
-    #     }
