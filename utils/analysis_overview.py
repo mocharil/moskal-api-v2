@@ -86,11 +86,8 @@ def get_social_media_matrix(
     # Definisikan social media dan non social media channels
     social_media_channels = ['reddit','youtube','linkedin','twitter',
                              'tiktok','instagram','facebook','threads']
-    non_social_media_channels = ["tiktok"]
+    non_social_media_channels = ["news"]
     all_channels = social_media_channels + non_social_media_channels
-    
-
-
     
     # Konversi list channels ke format indeks Elasticsearch
     channel_to_index = {
