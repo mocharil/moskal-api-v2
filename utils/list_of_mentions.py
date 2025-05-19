@@ -81,7 +81,7 @@ def get_mentions(
     cached_result = redis_client.get(cache_key)
     if cached_result is not None:
         print('Returning cached result')
-        return cached_result
+        #return cached_result
 
     # Buat koneksi Elasticsearch
     es = get_elasticsearch_client(
@@ -117,6 +117,8 @@ def get_mentions(
         sort_field = "viral_score"
     elif sort_type == "recent":
         sort_field = "post_created_at"
+    elif sort_type == 'top_profile':
+        sort_field = "followers"
     elif sort_type == "relevant":
         # Untuk relevant, akan menggunakan _score dari Elasticsearch
         pass
@@ -391,6 +393,15 @@ def get_mentions(
                         }
                         ]
 
+
+
+            elif sort_field == "followers":
+                print("FOLLOWERS")
+                query["sort"] = [
+                    {"user_followers": {"order": sort_order, "missing": "_last", "unmapped_type": "long"}},
+                    {"user_connections": {"order": sort_order, "missing": "_last", "unmapped_type": "long"}},
+                    {"subscriber": {"order": sort_order, "missing": "_last", "unmapped_type": "long"}}
+                ]
 
             else:
                 query["sort"] = [
