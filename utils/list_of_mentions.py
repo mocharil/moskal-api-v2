@@ -120,293 +120,123 @@ def get_mentions(
     elif sort_type == 'top_profile':
         sort_field = "followers"
     elif sort_type == "relevant":
-        # Untuk relevant, akan menggunakan _score dari Elasticsearch
-        pass
+        sort_field = '_score'
+
     
-    # Bangun query
-    if sort_type == "relevant" and keywords:
-        # Untuk relevant sorting
-        query = {
-            "size": page_size,
-            "from": (page - 1) * page_size,
-            "query": {
-                "bool": {
-                    "must": [
-                        {
-                            "range": {
-                                "post_created_at": {
-                                    "gte": start_date,
-                                    "lte": end_date
-                                }
-                            }
-                        }
-                    ],
-                    "should": [],
-                    "minimum_should_match": 1,
-                    "filter": []
-                }
-            }
-        }
-        
-        # Add keyword and search_keyword filters
-        if keywords or search_keyword:
-            must_conditions_inner = []
-            
-            # Handle regular keywords
-            if keywords:
-                # Konversi keywords ke list jika belum
-                keyword_list = keywords if isinstance(keywords, list) else [keywords]
-                keyword_should_conditions = []
-                
-                # Tentukan field yang akan digunakan berdasarkan case_sensitive
-                caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-                issue_field = "issue.keyword" if case_sensitive else "issue"
-                
-                if search_exact_phrases:
-                    # Gunakan match_phrase untuk exact matching
-                    for kw in keyword_list:
-                        keyword_should_conditions.extend([
-                            {"match_phrase": {caption_field: kw}},
-                            {"match_phrase": {issue_field: kw}}
-                        ])
-                else:
-                    # Gunakan match dengan operator AND
-                    for kw in keyword_list:
-                        keyword_should_conditions.extend([
-                            {"match": {caption_field: {"query": kw, "operator": "AND"}}},
-                            {"match": {issue_field: {"query": kw, "operator": "AND"}}}
-                        ])
-                
-                must_conditions_inner.append({
-                    "bool": {
-                        "should": keyword_should_conditions,
-                        "minimum_should_match": 1
-                    }
-                })
-            
-            # Handle search_keyword with same logic as keywords
-            if search_keyword:
-                # Konversi search_keyword ke list jika belum
-                search_keyword_list = search_keyword if isinstance(search_keyword, list) else [search_keyword]
-                search_keyword_should_conditions = []
-                
-                # Tentukan field yang akan digunakan berdasarkan case_sensitive
-                caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-                issue_field = "issue.keyword" if case_sensitive else "issue"
-                
-                if search_exact_phrases:
-                    # Gunakan match_phrase untuk exact matching
-                    for sk in search_keyword_list:
-                        search_keyword_should_conditions.extend([
-                            {"match_phrase": {caption_field: sk}},
-                            {"match_phrase": {issue_field: sk}}
-                        ])
-                else:
-                    # Gunakan match dengan operator AND
-                    for sk in search_keyword_list:
-                        search_keyword_should_conditions.extend([
-                            {"match": {caption_field: {"query": sk, "operator": "AND"}}},
-                            {"match": {issue_field: {"query": sk, "operator": "AND"}}}
-                        ])
-                
-                must_conditions_inner.append({
-                    "bool": {
-                        "should": search_keyword_should_conditions,
-                        "minimum_should_match": 1
-                    }
-                })
-            
-            # Add the combined conditions to must_conditions
-            must_conditions.append({
-                "bool": {
-                    "must": must_conditions_inner
-                }
-            })
-        
-        # Tambahkan filter sentiment jika ada
-        if sentiment:
-            sentiment_filter = {
-                "terms": {
-                    "sentiment": sentiment
-                }
-            }
-            query["query"]["bool"]["filter"].append(sentiment_filter)
-        
-        # Tambahkan filter importance
-        if importance == "important mentions":
-            query["query"]["bool"]["filter"].append({
-                "range": {
-                    "influence_score": {
-                        "gt": 50
-                    }
-                }
-            })
-        
-        # Tambahkan filter influence score jika ada
-        if influence_score_min is not None or influence_score_max is not None:
-            influence_range = {"range": {"influence_score": {}}}
-            if influence_score_min is not None:
-                influence_range["range"]["influence_score"]["gte"] = influence_score_min
-            if influence_score_max is not None:
-                influence_range["range"]["influence_score"]["lte"] = influence_score_max
-            query["query"]["bool"]["filter"].append(influence_range)
-        
-        # Tambahkan filter region jika ada
-        if region:
-            region_conditions = []
-            region_list = region if isinstance(region, list) else [region]
-            
-            for r in region_list:
-                region_conditions.append({"wildcard": {"region": f"*{r}*"}})
-            
-            region_filter = {
-                "bool": {
-                    "should": region_conditions,
-                    "minimum_should_match": 1
-                }
-            }
-            query["query"]["bool"]["filter"].append(region_filter)
-        
-        # Tambahkan filter language jika ada
-        if language:
-            language_conditions = []
-            language_list = language if isinstance(language, list) else [language]
-            
-            for l in language_list:
-                language_conditions.append({"wildcard": {"language": f"*{l}*"}})
-            
-            language_filter = {
-                "bool": {
-                    "should": language_conditions,
-                    "minimum_should_match": 1
-                }
-            }
-            query["query"]["bool"]["filter"].append(language_filter)
-        
-        # Tambahkan filter domain jika ada
-        if domain:
-            domain_filter = {
-                "bool": {
-                    "should": [{"wildcard": {"link_post": f"*{d}*"}} for d in domain],
-                    "minimum_should_match": 1
-                }
-            }
-            query["query"]["bool"]["filter"].append(domain_filter)
-    else:
-        # Bangun query biasa untuk non-relevant sort
-        query = build_elasticsearch_query(
-            keywords=keywords,
-            search_keyword=search_keyword,
-            search_exact_phrases=search_exact_phrases,
-            case_sensitive=case_sensitive,
-            sentiment=sentiment,
-            start_date=start_date,
-            end_date=end_date,
-            importance=importance,
-            influence_score_min=influence_score_min,
-            influence_score_max=influence_score_max,
-            region=region,
-            language=language,
-            domain=domain,
-            size=page_size
-        )
-        
-        # Tambahkan from untuk pagination
-        query["from"] = (page - 1) * page_size
-        
-        # Tambahkan pengurutan jika bukan relevant sort
-        if sort_field:
-            if sort_field == "viral_score":
-                query["sort"] = [
-                        {
-                            "_script": {
-                            "type": "number",
-                            "script": {
-                                "lang": "painless",
-                                "params": {
-                                "whitelist": [
-                                    "kompas.com", "detik.com", "cnnindonesia.com", "cnbcindonesia.com", "suara.com", "tribunnews.com",
-                                    "liputan6.com", "katadata.co.id", "apnews.com", "dawn.com", "republika.co.id", "viva.co.id",
-                                    "idntimes.com", "mediaindonesia.com", "okezone.com", "tvonenews.com", "jpnn.com", "antaranews.com"
-                                ],
-                                "max_val": 500.0
-                                },
-                                "source": """
-                                double logNorm(def val, double max) {
-                                    return Math.log(1 + val) / Math.log(1 + max);
-                                }
 
-                                String channel = doc.containsKey('channel') && !doc['channel'].empty ? doc['channel'].value : "";
-                                double likes = doc.containsKey('likes') && !doc['likes'].empty ? doc['likes'].value : 0;
-                                double comments = doc.containsKey('comments') && !doc['comments'].empty ? doc['comments'].value : 0;
-                                double replies = doc.containsKey('replies') && !doc['replies'].empty ? doc['replies'].value : 0;
-                                double retweets = doc.containsKey('retweets') && !doc['retweets'].empty ? doc['retweets'].value : 0;
-                                double reposts = doc.containsKey('reposts') && !doc['reposts'].empty ? doc['reposts'].value : 0;
-                                double shares = doc.containsKey('shares') && !doc['shares'].empty ? doc['shares'].value : 0;
-                                double favorites = doc.containsKey('favorites') && !doc['favorites'].empty ? doc['favorites'].value : 0;
-                                double votes = doc.containsKey('votes') && !doc['votes'].empty ? doc['votes'].value : 0;
-                                double views = doc.containsKey('views') && !doc['views'].empty ? doc['views'].value : 0;
-                                double score = 0;
-
-                                if (channel == 'twitter') {
-                                    double E = logNorm(likes, params.max_val) * 0.4 + logNorm(replies, params.max_val) * 0.3 + logNorm(retweets, params.max_val) * 0.3;
-                                    double R = logNorm(views, params.max_val);
-                                    score = (0.6 * E + 0.4 * R) * 10;
-                                } else if (channel == 'linkedin') {
-                                    double E = logNorm(likes, params.max_val) * 0.5 + logNorm(comments, params.max_val) * 0.3;
-                                    double R = logNorm(reposts, params.max_val) * 0.2;
-                                    score = (0.6 * E + 0.4 * R) * 10;
-                                } else if (channel == 'tiktok') {
-                                    double E = logNorm(likes, params.max_val) * 0.4 + logNorm(comments, params.max_val) * 0.3 + logNorm(favorites, params.max_val) * 0.1;
-                                    double R = logNorm(shares, params.max_val) * 0.2;
-                                    score = (0.6 * E + 0.4 * R) * 10;
-                                } else if (channel == 'instagram') {
-                                    if (views > 0) {
-                                    double E = logNorm(likes, params.max_val) * 0.5 + logNorm(comments, params.max_val) * 0.3;
-                                    double R = logNorm(views, params.max_val) * 0.2;
-                                    score = (0.6 * E + 0.4 * R) * 10;
-                                    } else {
-                                    double E = logNorm(likes, params.max_val) * 0.6 + logNorm(comments, params.max_val) * 0.4;
-                                    score = 0.6 * E * 10;
-                                    }
-                                } else if (channel == 'reddit') {
-                                    double E = logNorm(votes, params.max_val) * 0.6;
-                                    double R = logNorm(comments, params.max_val) * 0.4;
-                                    score = (0.6 * E + 0.4 * R) * 10;
-                                } else if (channel == 'youtube') {
-                                    double E = logNorm(likes, params.max_val) * 0.4 + logNorm(comments, params.max_val) * 0.2;
-                                    double R = logNorm(views, params.max_val) * 0.4;
-                                    score = (0.6 * E + 0.4 * R) * 10;
-                                } else if (channel == 'news') {
-                                    String username = doc.containsKey('username.keyword') && !doc['username.keyword'].empty ? doc['username.keyword'].value : "";
-                                    double A = params.whitelist.contains(username) ? 1.0 : 0.0;
-                                    double M = (doc.containsKey('post_media_link') && !doc['post_media_link'].empty && doc['post_media_link'].value.contains("http")) ? 1.0 : 0.0;
-                                    double Q = doc.containsKey('list_quotes.keyword') && !doc['list_quotes.keyword'].empty && doc['list_quotes.keyword'].value.contains("quotes") ? 1.0 : 0.0;
-                                    score = (0.6 * A + 0.2 * M + 0.2 * Q) * 10;
-                                }
-
-                                return Math.min(score, 10.0);
-                                """
+    # Bangun query biasa untuk non-relevant sort
+    query = build_elasticsearch_query(
+        keywords=keywords,
+        search_keyword=search_keyword,
+        search_exact_phrases=search_exact_phrases,
+        case_sensitive=case_sensitive,
+        sentiment=sentiment,
+        start_date=start_date,
+        end_date=end_date,
+        importance=importance,
+        influence_score_min=influence_score_min,
+        influence_score_max=influence_score_max,
+        region=region,
+        language=language,
+        domain=domain,
+        size=page_size
+    )
+    
+    # Tambahkan from untuk pagination
+    query["from"] = (page - 1) * page_size
+    
+    # Tambahkan pengurutan jika bukan relevant sort
+    if sort_field:
+        if sort_field == "viral_score":
+            query["sort"] = [
+                    {
+                        "_script": {
+                        "type": "number",
+                        "script": {
+                            "lang": "painless",
+                            "params": {
+                            "whitelist": [
+                                "kompas.com", "detik.com", "cnnindonesia.com", "cnbcindonesia.com", "suara.com", "tribunnews.com",
+                                "liputan6.com", "katadata.co.id", "apnews.com", "dawn.com", "republika.co.id", "viva.co.id",
+                                "idntimes.com", "mediaindonesia.com", "okezone.com", "tvonenews.com", "jpnn.com", "antaranews.com"
+                            ],
+                            "max_val": 500.0
                             },
-                            "order": sort_order
+                            "source": """
+                            double logNorm(def val, double max) {
+                                return Math.log(1 + val) / Math.log(1 + max);
                             }
+
+                            String channel = doc.containsKey('channel') && !doc['channel'].empty ? doc['channel'].value : "";
+                            double likes = doc.containsKey('likes') && !doc['likes'].empty ? doc['likes'].value : 0;
+                            double comments = doc.containsKey('comments') && !doc['comments'].empty ? doc['comments'].value : 0;
+                            double replies = doc.containsKey('replies') && !doc['replies'].empty ? doc['replies'].value : 0;
+                            double retweets = doc.containsKey('retweets') && !doc['retweets'].empty ? doc['retweets'].value : 0;
+                            double reposts = doc.containsKey('reposts') && !doc['reposts'].empty ? doc['reposts'].value : 0;
+                            double shares = doc.containsKey('shares') && !doc['shares'].empty ? doc['shares'].value : 0;
+                            double favorites = doc.containsKey('favorites') && !doc['favorites'].empty ? doc['favorites'].value : 0;
+                            double votes = doc.containsKey('votes') && !doc['votes'].empty ? doc['votes'].value : 0;
+                            double views = doc.containsKey('views') && !doc['views'].empty ? doc['views'].value : 0;
+                            double score = 0;
+
+                            if (channel == 'twitter') {
+                                double E = logNorm(likes, params.max_val) * 0.4 + logNorm(replies, params.max_val) * 0.3 + logNorm(retweets, params.max_val) * 0.3;
+                                double R = logNorm(views, params.max_val);
+                                score = (0.6 * E + 0.4 * R) * 10;
+                            } else if (channel == 'linkedin') {
+                                double E = logNorm(likes, params.max_val) * 0.5 + logNorm(comments, params.max_val) * 0.3;
+                                double R = logNorm(reposts, params.max_val) * 0.2;
+                                score = (0.6 * E + 0.4 * R) * 10;
+                            } else if (channel == 'tiktok') {
+                                double E = logNorm(likes, params.max_val) * 0.4 + logNorm(comments, params.max_val) * 0.3 + logNorm(favorites, params.max_val) * 0.1;
+                                double R = logNorm(shares, params.max_val) * 0.2;
+                                score = (0.6 * E + 0.4 * R) * 10;
+                            } else if (channel == 'instagram') {
+                                if (views > 0) {
+                                double E = logNorm(likes, params.max_val) * 0.5 + logNorm(comments, params.max_val) * 0.3;
+                                double R = logNorm(views, params.max_val) * 0.2;
+                                score = (0.6 * E + 0.4 * R) * 10;
+                                } else {
+                                double E = logNorm(likes, params.max_val) * 0.6 + logNorm(comments, params.max_val) * 0.4;
+                                score = 0.6 * E * 10;
+                                }
+                            } else if (channel == 'reddit') {
+                                double E = logNorm(votes, params.max_val) * 0.6;
+                                double R = logNorm(comments, params.max_val) * 0.4;
+                                score = (0.6 * E + 0.4 * R) * 10;
+                            } else if (channel == 'youtube') {
+                                double E = logNorm(likes, params.max_val) * 0.4 + logNorm(comments, params.max_val) * 0.2;
+                                double R = logNorm(views, params.max_val) * 0.4;
+                                score = (0.6 * E + 0.4 * R) * 10;
+                            } else if (channel == 'news') {
+                                String username = doc.containsKey('username.keyword') && !doc['username.keyword'].empty ? doc['username.keyword'].value : "";
+                                double A = params.whitelist.contains(username) ? 1.0 : 0.0;
+                                double M = (doc.containsKey('post_media_link') && !doc['post_media_link'].empty && doc['post_media_link'].value.contains("http")) ? 1.0 : 0.0;
+                                double Q = doc.containsKey('list_quotes.keyword') && !doc['list_quotes.keyword'].empty && doc['list_quotes.keyword'].value.contains("quotes") ? 1.0 : 0.0;
+                                score = (0.6 * A + 0.2 * M + 0.2 * Q) * 10;
+                            }
+
+                            return Math.min(score, 10.0);
+                            """
+                        },
+                        "order": sort_order
                         }
-                        ]
+                    }
+                    ]
 
 
+        elif sort_field == "followers":
+            print("FOLLOWERS")
+            query["sort"] = [
+                {"user_followers": {"order": sort_order, "missing": "_last", "unmapped_type": "long"}},
+                {"user_connections": {"order": sort_order, "missing": "_last", "unmapped_type": "long"}},
+                {"subscriber": {"order": sort_order, "missing": "_last", "unmapped_type": "long"}}
+            ]
 
-            elif sort_field == "followers":
-                print("FOLLOWERS")
-                query["sort"] = [
-                    {"user_followers": {"order": sort_order, "missing": "_last", "unmapped_type": "long"}},
-                    {"user_connections": {"order": sort_order, "missing": "_last", "unmapped_type": "long"}},
-                    {"subscriber": {"order": sort_order, "missing": "_last", "unmapped_type": "long"}}
-                ]
-
-            else:
-                query["sort"] = [
-                    {sort_field: {"order": sort_order}}
-                ]
+        else:
+            query["sort"] = [
+                {sort_field: {"order": sort_order}}
+            ]
     
     # Tambahkan source parameter ke query jika disediakan
     if source is not None:
