@@ -1,6 +1,6 @@
-# Dokumentasi API Endpoints
+# Dokumentasi Fungsi Utilitas Moskal AI
 
-Dokumentasi ini menjelaskan input dan output untuk setiap endpoint API.
+Dokumentasi ini menjelaskan input dan output untuk setiap fungsi utilitas.
 
 
 INPUT PARAMETER : `CommonParams`
@@ -25,15 +25,14 @@ INPUT PARAMETER : `CommonParams`
 | `language` | list of str (optional) | `None` | Language filters | `['indonesia', 'english']` |
 | `domain` | list of str (optional) | `None` | Domain filters | `['kumparan.com', 'detik.com']` |
 
-## Endpoint: `/api/v2/mention-sentiment-breakdown`
+## Fungsi: `utils.analysis_sentiment_mentions.handler_function`
 
-- **Metode:** `POST`
 - **Deskripsi:** Analisis sentimen dan breakdown mention.
 
-### Input (Request Body)
-Menggunakan CommonParams 
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams`.
 
-### Output (Response Body)
+### Output (Return Value)
 {
   "mentions_by_category": {
     "total": 23753,
@@ -116,16 +115,14 @@ Menggunakan CommonParams
   }
 }
 
-## Endpoint: `/api/v2/analysis-overview`
+## Fungsi: `utils.analysis_overview.handler_function`
 
-- **Metode:** `POST`
 - **Deskripsi:** Gambaran umum analisis.
 
-### Input (Request Body)
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams`.
 
-Menggunakan CommonParams 
-
-### Output (Response Body)
+### Output (Return Value)
 {
   "total_mentions": {
     "value": 23753,
@@ -271,18 +268,18 @@ Menggunakan CommonParams
 
 
 
-## Endpoint: `/api/v2/list-of-mentions`
+## Fungsi: `utils.list_of_mentions.handler_function`
 
-- **Metode:** `POST`
-- **Deskripsi:** Mendapatkan list mentions mentions.
+- **Deskripsi:** Mendapatkan list mentions.
 
-### Input (Request Body)
-
-Menggunakan CommonParams dengan tambahan input
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams` dengan tambahan parameter berikut:
+| Nama Parameter | Tipe Data | Default | Deskripsi | Contoh |
+|---|---|---|---|---|
 | `sort_type` | str | `recent` | Sort type: 'popular', 'recent', or 'relevant' | `recent` |
 | `sort_order` | str | `desc` | Sort order: 'desc' or 'asc' | `desc` |
 
-### Output (Response Body)
+### Output (Return Value)
 
 {
   "data": [
@@ -333,29 +330,17 @@ Menggunakan CommonParams dengan tambahan input
   ]
 }
 
-## Endpoint: `/api/v2/presence-score`
+## Fungsi: `utils.presence_score.presence_score_analysis`
 
-- **Metode:** `POST`
 - **Deskripsi:** Analisis skor kehadiran.
 
-Digunakan pada menu:
-- Analysis : 
-    Presence Score
-- Summary:
-    Presence Score -> gunakan score nya saja
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams` dengan tambahan parameter berikut:
+- `interval`: "day", "week", "month"
+- `compare_with_topics`: true/false
+- `num_topics_to_compare`: jumlah topik untuk dibandingkan
 
-Parameter tambahan:
-- interval: "day", "week", "month"
-- compare_with_topics: true/false
-- num_topics_to_compare: jumlah topik untuk dibandingkan
-- **Fungsi Handler:** `presence_score_analysis`
-- **Tags:** Analysis Menu
-
-### Input (Request Body)
-
-Menggunakan CommonParams 
-
-### Output (Response Body)
+### Output (Return Value)
 
 {
   "current_presence_score": 12.709951659824668,
@@ -371,22 +356,14 @@ Menggunakan CommonParams
   ]
 }
 ---
+## Fungsi: `utils.share_of_voice.handler_function`
 
-## Endpoint: `/api/v2/most-share-of-voice`
-
-- **Metode:** `POST`
 - **Deskripsi:** Analisis porsi suara yang paling banyak.
 
-Digunakan pada Menu:
-- Analysis -> Most Share of Voice
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams` dan parameter spesifik dari `ShareOfVoiceRequest` (detail parameter `ShareOfVoiceRequest` perlu dijabarkan jika berbeda dari `CommonParams` atau jika ada tambahan).
 
-### Input (Request Body)
-
-Menggunakan model: `ShareOfVoiceRequest`
-
-**Parameter Umum (dari `CommonParams`):**
-
-### Output (Response Body)
+### Output (Return Value)
 
 {
   "data": [
@@ -409,16 +386,14 @@ Menggunakan model: `ShareOfVoiceRequest`
   ]
 }
 ---
+## Fungsi: `utils.most_followers.handler_function`
 
-## Endpoint: `/api/v2/most-followers`
-
-- **Metode:** `POST`
 - **Deskripsi:** Analisis pengikut terbanyak.
 
-### Input (Request Body)
-**Parameter Umum (dari `CommonParams`):**
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams`.
 
-### Output (Response Body)
+### Output (Return Value)
 {
   "data": [
     {
@@ -442,19 +417,14 @@ Menggunakan model: `ShareOfVoiceRequest`
   ]
 }
 ---
+## Fungsi: `utils.trending_hashtags.handler_function`
 
-## Endpoint: `/api/v2/trending-hashtags`
-
-- **Metode:** `POST`
 - **Deskripsi:** Analisis tren hashtag.
 
-### Input (Request Body)
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams` dan parameter spesifik dari `HashtagsRequest` (detail parameter `HashtagsRequest` perlu dijabarkan jika berbeda dari `CommonParams` atau jika ada tambahan).
 
-Menggunakan model: `HashtagsRequest`
-
-**Parameter Umum (dari `CommonParams`):**
-
-### Output (Response Body)
+### Output (Return Value)
 
 {
   "data": [
@@ -475,17 +445,14 @@ Menggunakan model: `HashtagsRequest`
   ]
 }
 ---
+## Fungsi: `utils.trending_links.handler_function`
 
-## Endpoint: `/api/v2/trending-links`
-
-- **Metode:** `POST`
 - **Deskripsi:** Analisis tren tautan.
 
-### Input (Request Body)
-
-**Parameter Umum (dari `CommonParams`):**
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams`.
     
-### Output (Response Body)
+### Output (Return Value)
 {
   "data": [
     {
@@ -499,19 +466,14 @@ Menggunakan model: `HashtagsRequest`
   ]
 }
 ---
+## Fungsi: `utils.popular_emojis.handler_function`
 
-## Endpoint: `/api/v2/popular-emojis`
-
-- **Metode:** `POST`
 - **Deskripsi:** Analisis emoji populer.
 
-### Input (Request Body)
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams` dan parameter spesifik dari `EmojisRequest` (detail parameter `EmojisRequest` perlu dijabarkan jika berbeda dari `CommonParams` atau jika ada tambahan).
 
-Menggunakan model: `EmojisRequest`
-
-**Parameter Umum (dari `CommonParams`):**
-
-### Output (Response Body)
+### Output (Return Value)
 {
   "data": [
     {
@@ -525,17 +487,14 @@ Menggunakan model: `EmojisRequest`
   ]
 }
 ---
+## Fungsi: `utils.summary_stats.handler_function`
 
-## Endpoint: `/api/v2/stats`
-
-- **Metode:** `POST`
 - **Deskripsi:** Analisis ringkasan statistik.
 
-### Input (Request Body)
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams`.
 
-**Parameter Umum (dari `CommonParams`):**
-
-### Output (Response Body)
+### Output (Return Value)
 {
   "non_social_mentions": {
     "value": 17473,
@@ -645,17 +604,14 @@ Menggunakan model: `EmojisRequest`
   }
 }
 ---
+## Fungsi: `utils.intent_emotions_region.handler_function`
 
-## Endpoint: `/api/v2/intent-emotions-region`
-
-- **Metode:** `POST`
 - **Deskripsi:** Analisis niat, emosi, dan wilayah.
 
-### Input (Request Body)
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams`.
 
-Menggunakan model: `CommonParams`
-
-### Output (Response Body)
+### Output (Return Value)
 {
   "intents_share": [
     {
@@ -689,22 +645,18 @@ Menggunakan model: `CommonParams`
   ]
 }
 ---
+## Fungsi: `utils.topics_overview.handler_function`
 
-## Endpoint: `/api/v2/topics-overview`
-
-- **Metode:** `POST`
 - **Deskripsi:** Gambaran umum topik.
 
-### Input (Request Body)
-
-**Parameter Umum (dari `CommonParams`):**
-**Parameter Spesifik untuk `TopicsOverviewRequest`:**
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams` dengan tambahan parameter spesifik berikut:
 | Nama Parameter | Tipe Data | Default | Deskripsi | Contoh |
 |---|---|---|---|---|
 | `owner_id` | str | `N/A` | Owner ID | `5` |
 | `project_name` | str | `N/A` | Project name | `gibran raka` |
 
-### Output (Response Body)
+### Output (Return Value)
 [
   {
     "unified_issue": "Policy and Regulation in Specific Sectors",
@@ -722,26 +674,18 @@ Menggunakan model: `CommonParams`
   }
 ]
 ---
+## Fungsi: `utils.kol_overview.handler_function`
 
-## Endpoint: `/api/v2/kol-overview`
-
-- **Metode:** `POST`
 - **Deskripsi:** Gambaran umum Key Opinion Leaders.
 
-### Input (Request Body)
-
-Menggunakan model: `KolOverviewRequest`
-
-**Parameter Umum (dari `CommonParams`):**
-
-**Parameter Spesifik untuk `KolOverviewRequest`:**
-
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams` dengan tambahan parameter spesifik berikut:
 | Nama Parameter | Tipe Data | Default | Deskripsi | Contoh |
 |---|---|---|---|---|
 | `owner_id` | str | `N/A` | Owner ID | `5` |
 | `project_name` | str | `N/A` | Project name | `gibran raka` |
 
-### Output (Response Body)
+### Output (Return Value)
 [
   {
     "link_user": "https://www.instagram.com/zul.hasan",
@@ -769,20 +713,14 @@ Menggunakan model: `KolOverviewRequest`
   }
 ]
 ---
-# Dokumentasi API Endpoints
+## Fungsi: `utils.keyword_trends.handler_function`
 
-Dokumentasi ini menjelaskan input dan output untuk setiap endpoint API.
-
-## Endpoint: `/api/v2/keyword-trends`
-
-- **Metode:** `POST`
 - **Deskripsi:** Analisis tren kata kunci.
 
-### Input (Request Body)
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams`.
 
-Menggunakan model: `CommonParams`
-
-### Output (Response Body)
+### Output (Return Value)
 [
   {
     "post_date": "2025-04-19 00:00:00",
@@ -802,17 +740,14 @@ Menggunakan model: `CommonParams`
   }
 ]
 ---
+## Fungsi: `utils.context_of_disccusion.handler_function`
 
-## Endpoint: `/api/v2/context-of-discussion`
-
-- **Metode:** `POST`
 - **Deskripsi:** Analisis konteks diskusi.
 
-### Input (Request Body)
+### Input (Parameters)
+Menerima dictionary `params` yang mengikuti struktur `CommonParams`.
 
-Menggunakan model: `CommonParams`
-
-### Output (Response Body)
+### Output (Return Value)
 {
   "data": [
     {

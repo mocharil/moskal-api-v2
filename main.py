@@ -22,6 +22,7 @@ from utils.share_of_voice import get_share_of_voice
 from utils.summary_stats import get_stats_summary
 from utils.trending_hashtags import get_trending_hashtags
 from utils.trending_links import get_trending_links
+from utils.moskal_ai import pipeline_ai # Added import for moskal_ai pipeline
 import sys
 import traceback
 
@@ -313,6 +314,19 @@ class KolOverviewRequest(CommonParams):
         ...,
         example="gibran raka", 
         description="Project name"
+    )
+
+# Request model for Moskal AI Pipeline
+class MoskalAIRequest(BaseModel):
+    user_query: str = Field(
+        ...,
+        example="siapa budi arie? dan hubungannya dengan koperasi apa?",
+        description="The user's query to be processed by Moskal AI."
+    )
+    extracted_keywords: Optional[List[str]] = Field(
+        default=None,
+        example=["politik", "gibran"],
+        description="Optional list of keywords extracted from the user query (e.g., by NER)."
     )
 
 # Example object to demonstrate in docstrings
@@ -874,3 +888,49 @@ def kol_overview_analysis(
         params_dict['channels'] = ['news' if ch == 'media' else ch for ch in params_dict['channels']]
 
     return search_kol(**params_dict)
+
+########### MOSKAL AI ##########
+@app.post("/api/v2/moskal-ai-pipeline", tags=["Moskal AI"])
+def moskal_ai_process(
+    request_data: MoskalAIRequest = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard Moskal AI query",
+                "description": "A standard query with user text and optional keywords.",
+                "value": {
+                    "user_query": "tell me about prabowo's recent activities regarding food security",
+                    "extracted_keywords": ["prabowo", "food security"]
+                }
+            },
+            "no_keywords": {
+                "summary": "Query without pre-extracted keywords",
+                "description": "A query where keywords will be determined by the pipeline.",
+                "value": {
+                    "user_query": "what is the sentiment around the new Gibran policy?"
+                }
+            }
+        }
+    )
+):
+    """
+    Processes a user query through the Moskal AI pipeline.
+    
+    This endpoint takes a user's natural language query and an optional list of
+    pre-extracted keywords. It then uses the `pipeline_ai` function to:
+    1. Determine relevant utility functions to call based on the query.
+    2. Fetch data using Elasticsearch.
+    3. Call the identified utility functions.
+    4. Synthesize an answer using a generative AI model (Gemini).
+    """
+    try:
+        result = pipeline_ai(
+            user_query=request_data.user_query,
+            extracted_keywords=request_data.extracted_keywords
+        )
+        return result
+    except Exception as e:
+        print(f"Error in /moskal-ai-pipeline: {e}")
+        traceback.print_exc()
+        # Consider returning a more structured error response, e.g., FastAPI's HTTPException
+        return {"error": "An internal server error occurred", "detail": str(e)}
