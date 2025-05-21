@@ -739,31 +739,3 @@ Menerima dictionary `params` yang mengikuti struktur `CommonParams`.
     "total_neutral": 197
   }
 ]
----
-## Fungsi: `utils.context_of_disccusion.handler_function`
-
-- **Deskripsi:** Analisis konteks diskusi.
-
-### Input (Parameters)
-Menerima dictionary `params` yang mengikuti struktur `CommonParams`.
-
-### Output (Return Value)
-{
-  "data": [
-    {
-      "hashtag": "prabowo",
-      "total_mentions": 19267,
-      "dominant_sentiment": "neutral",
-      "dominant_sentiment_count": 12731,
-      "dominant_sentiment_percentage": 66.1
-    },
-    {
-      "hashtag": "presiden",
-      "total_mentions": 18473,
-      "dominant_sentiment": "neutral",
-      "dominant_sentiment_count": 12346,
-      "dominant_sentiment_percentage": 66.8
-    }
-  ]
-}
----
