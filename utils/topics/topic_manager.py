@@ -284,6 +284,9 @@ def topic_overviews(
     language: Optional[str] = None,
     domain: Optional[str] = None
 ) -> List[Dict]:
+
+    if not search_keyword:
+        search_keyword = []
     # Generate cache key based on all parameters
     cache_key = redis_client.generate_cache_key(
         "topics_overview",
