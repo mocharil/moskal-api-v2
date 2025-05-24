@@ -13,6 +13,7 @@ from utils.es_query_builder import (
     get_date_range
 )
 from utils.redis_client import redis_client
+from utils.script_score import script_score
 
 def get_mentions(
     es_host=None,
@@ -81,7 +82,7 @@ def get_mentions(
     cached_result = redis_client.get(cache_key)
     if cached_result is not None:
         print('Returning cached result')
-        #return cached_result
+        return cached_result
 
     # Buat koneksi Elasticsearch
     es = get_elasticsearch_client(
@@ -111,6 +112,7 @@ def get_mentions(
             custom_end_date=custom_end_date
         )
     
+    
     # Konversi sort_type ke field sort yang sesuai
     sort_field = None
     if sort_type == "popular":
@@ -121,8 +123,6 @@ def get_mentions(
         sort_field = "followers"
     elif sort_type == "relevant":
         sort_field = '_score'
-
-    
 
     # Bangun query biasa untuk non-relevant sort
     query = build_elasticsearch_query(
@@ -152,78 +152,11 @@ def get_mentions(
                     {
                         "_script": {
                         "type": "number",
-                        "script": {
-                            "lang": "painless",
-                            "params": {
-                            "whitelist": [
-                                "kompas.com", "detik.com", "cnnindonesia.com", "cnbcindonesia.com", "suara.com", "tribunnews.com",
-                                "liputan6.com", "katadata.co.id", "apnews.com", "dawn.com", "republika.co.id", "viva.co.id",
-                                "idntimes.com", "mediaindonesia.com", "okezone.com", "tvonenews.com", "jpnn.com", "antaranews.com"
-                            ],
-                            "max_val": 500.0
-                            },
-                            "source": """
-                            double logNorm(def val, double max) {
-                                return Math.log(1 + val) / Math.log(1 + max);
-                            }
-
-                            String channel = doc.containsKey('channel') && !doc['channel'].empty ? doc['channel'].value : "";
-                            double likes = doc.containsKey('likes') && !doc['likes'].empty ? doc['likes'].value : 0;
-                            double comments = doc.containsKey('comments') && !doc['comments'].empty ? doc['comments'].value : 0;
-                            double replies = doc.containsKey('replies') && !doc['replies'].empty ? doc['replies'].value : 0;
-                            double retweets = doc.containsKey('retweets') && !doc['retweets'].empty ? doc['retweets'].value : 0;
-                            double reposts = doc.containsKey('reposts') && !doc['reposts'].empty ? doc['reposts'].value : 0;
-                            double shares = doc.containsKey('shares') && !doc['shares'].empty ? doc['shares'].value : 0;
-                            double favorites = doc.containsKey('favorites') && !doc['favorites'].empty ? doc['favorites'].value : 0;
-                            double votes = doc.containsKey('votes') && !doc['votes'].empty ? doc['votes'].value : 0;
-                            double views = doc.containsKey('views') && !doc['views'].empty ? doc['views'].value : 0;
-                            double score = 0;
-
-                            if (channel == 'twitter') {
-                                double E = logNorm(likes, params.max_val) * 0.4 + logNorm(replies, params.max_val) * 0.3 + logNorm(retweets, params.max_val) * 0.3;
-                                double R = logNorm(views, params.max_val);
-                                score = (0.6 * E + 0.4 * R) * 10;
-                            } else if (channel == 'linkedin') {
-                                double E = logNorm(likes, params.max_val) * 0.5 + logNorm(comments, params.max_val) * 0.3;
-                                double R = logNorm(reposts, params.max_val) * 0.2;
-                                score = (0.6 * E + 0.4 * R) * 10;
-                            } else if (channel == 'tiktok') {
-                                double E = logNorm(likes, params.max_val) * 0.4 + logNorm(comments, params.max_val) * 0.3 + logNorm(favorites, params.max_val) * 0.1;
-                                double R = logNorm(shares, params.max_val) * 0.2;
-                                score = (0.6 * E + 0.4 * R) * 10;
-                            } else if (channel == 'instagram') {
-                                if (views > 0) {
-                                double E = logNorm(likes, params.max_val) * 0.5 + logNorm(comments, params.max_val) * 0.3;
-                                double R = logNorm(views, params.max_val) * 0.2;
-                                score = (0.6 * E + 0.4 * R) * 10;
-                                } else {
-                                double E = logNorm(likes, params.max_val) * 0.6 + logNorm(comments, params.max_val) * 0.4;
-                                score = 0.6 * E * 10;
-                                }
-                            } else if (channel == 'reddit') {
-                                double E = logNorm(votes, params.max_val) * 0.6;
-                                double R = logNorm(comments, params.max_val) * 0.4;
-                                score = (0.6 * E + 0.4 * R) * 10;
-                            } else if (channel == 'youtube') {
-                                double E = logNorm(likes, params.max_val) * 0.4 + logNorm(comments, params.max_val) * 0.2;
-                                double R = logNorm(views, params.max_val) * 0.4;
-                                score = (0.6 * E + 0.4 * R) * 10;
-                            } else if (channel == 'news') {
-                                String username = doc.containsKey('username.keyword') && !doc['username.keyword'].empty ? doc['username.keyword'].value : "";
-                                double A = params.whitelist.contains(username) ? 1.0 : 0.0;
-                                double M = (doc.containsKey('post_media_link') && !doc['post_media_link'].empty && doc['post_media_link'].value.contains("http")) ? 1.0 : 0.0;
-                                double Q = doc.containsKey('list_quotes.keyword') && !doc['list_quotes.keyword'].empty && doc['list_quotes.keyword'].value.contains("quotes") ? 1.0 : 0.0;
-                                score = (0.6 * A + 0.2 * M + 0.2 * Q) * 10;
-                            }
-
-                            return Math.min(score, 10.0);
-                            """
-                        },
+                        "script": script_score,
                         "order": sort_order
                         }
                     }
                     ]
-
 
         elif sort_field == "followers":
             print("FOLLOWERS")
@@ -237,6 +170,13 @@ def get_mentions(
             query["sort"] = [
                 {sort_field: {"order": sort_order}}
             ]
+    
+    # Tambahkan script fields untuk menghitung influence_score
+    query["script_fields"] = {
+        "calculated_influence_score": {
+            "script": script_score
+        }
+    }
     
     # Tambahkan source parameter ke query jika disediakan
     if source is not None:
@@ -276,8 +216,17 @@ def get_mentions(
             body=query
         )
         
-        # Dapatkan posts
-        posts = [hit["_source"] for hit in response["hits"]["hits"]]
+        # Dapatkan posts dan tambahkan calculated influence score
+        posts = []
+        for hit in response["hits"]["hits"]:
+            post = hit["_source"]
+            # Ambil calculated influence score dari script fields
+            if "fields" in hit and "calculated_influence_score" in hit["fields"]:
+                post['influence_score'] = hit["fields"]["calculated_influence_score"][0]
+            else:
+                # Fallback jika script field tidak ada
+                post['influence_score'] = 0
+            posts.append(post)
 
         for i in posts:
             if i['channel'] == 'news':
@@ -287,10 +236,6 @@ def get_mentions(
 
                 if 'user_image_url' not in i:
                     i.update({"user_image_url":f"https://logo.clearbit.com/{i['username']}"})
-
-        from utils.influence_score import get_influence_score
-        for i in posts:
-            i.update({'influence_score':get_influence_score(i)})
 
         # Dapatkan total posts
         total_posts = response["hits"]["total"]["value"]

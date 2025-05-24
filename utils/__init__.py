@@ -10,8 +10,7 @@ from utils.es_query_builder import (
     build_elasticsearch_query,
     get_indices_from_channels,
     get_date_range,
-    add_time_series_aggregation,
-    add_wordcloud_aggregation
+    add_time_series_aggregation
 )
 from utils.es_data_fetcher import (
     fetch_elasticsearch_data,
@@ -37,7 +36,7 @@ __all__ = [
     'get_indices_from_channels',
     'get_date_range',
     'add_time_series_aggregation',
-    'add_wordcloud_aggregation',
+  
     
     # Data Fetcher
     'fetch_elasticsearch_data',

@@ -8,7 +8,7 @@ from typing import Dict, List, Literal, Optional, Union
 from utils.es_client import get_elasticsearch_client
 from utils.es_query_builder import get_date_range
 from utils.redis_client import redis_client
-
+from utils.script_score import script_score
 def get_social_media_matrix(
     es_host=None,
     es_username=None,
@@ -128,6 +128,10 @@ def get_social_media_matrix(
     previous_start_str = previous_start.strftime("%Y-%m-%d")
     previous_end_str = previous_end.strftime("%Y-%m-%d")
     
+    # Script score untuk menghitung presence score
+    script_score_temp = script_score.copy()
+    script_score_temp["source"] = script_score_temp["source"].replace("return Math.min(score, 10.0);","return Math.min(score, 10.0)*10;")
+
     # Bangun query dasar
     def build_base_query(query_start_date, query_end_date):
         must_conditions = [
@@ -332,10 +336,10 @@ def get_social_media_matrix(
                     "size": 10
                 }
             },
-            # Presence score
+            # Presence score menggunakan script score
             "presence_score": {
                 "avg": {
-                    "field": "influence_score"
+                    "script": script_score_temp
                 }
             },
             # Social media metrics
@@ -419,19 +423,29 @@ def get_social_media_matrix(
         return query
     
     # Fungsi untuk menghitung growth
-    def calculate_growth(current_value, previous_value):
-        if previous_value == 0 or previous_value is None:
-            return {"value": current_value, "growth": None, "growth_value": None, "growth_percentage": None}
-        
+    def calculate_growth(current_value: float, previous_value: float) -> dict:
+        """
+        Hitung growth dengan memastikan output tidak ada yang null.
+        Jika previous_value 0 atau None, growth dan growth_percentage = 0.
+        """
+        # Pastikan nilai valid, kalau None jadi 0
+        current_value = current_value or 0
+        previous_value = previous_value or 0
+
         growth_value = current_value - previous_value
-        growth_percentage = (growth_value / previous_value) * 100
-        
+
+        if previous_value == 0:
+            growth_percentage = 0.0
+        else:
+            growth_percentage = (growth_value / previous_value) * 100
+
         return {
             "value": current_value,
             "growth": growth_value,
             "growth_value": growth_value,
             "growth_percentage": growth_percentage
         }
+
  
     # === PERIODE SAAT INI ===
     # Bangun dan jalankan query untuk semua channels
@@ -596,7 +610,7 @@ def get_social_media_matrix(
         elif value >= 1_000:
             return f"{value/1_000:.1f}K"
         else:
-            return str(int(value))
+            return str(round(value))
     
     # Membuat matriks hasil dengan format yang diinginkan
     matrix = {

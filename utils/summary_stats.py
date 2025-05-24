@@ -375,18 +375,21 @@ def get_stats_summary(
         result = {
             "value": current_value,
             "display": format_number(current_value),
-            "growth": None,
-            "growth_display": "N/A",
-            "growth_percentage": None,
-            "growth_percentage_display": "N/A"
+            "growth": 0,
+            "growth_display": "0",
+            "growth_percentage": 0,
+            "growth_percentage_display": "0%"
         }
-        if previous_value is not None and previous_value != 0:
+
+        if previous_value not in (None, 0):
             growth_value = current_value - previous_value
             growth_percentage = (growth_value / previous_value) * 100
+
             result["growth"] = growth_value
             result["growth_display"] = format_growth(growth_value)
             result["growth_percentage"] = round(growth_percentage)
             result["growth_percentage_display"] = format_percentage(growth_percentage)
+
         return result
 
     # Format number to K, M format

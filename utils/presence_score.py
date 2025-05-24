@@ -17,7 +17,7 @@ from typing import Dict, List, Literal, Optional, Union, Tuple
 from utils.es_client import get_elasticsearch_client
 from utils.es_query_builder import get_date_range
 from utils.redis_client import redis_client
-
+from utils.script_score import script_score
 def get_presence_score(
     es_host=None,
     es_username=None,
@@ -128,6 +128,9 @@ def get_presence_score(
         calendar_interval = "week"
         format_str = "yyyy-MM-dd"
     
+    script_score_temp = script_score.copy()
+    script_score_temp["source"] = script_score_temp["source"].replace("return Math.min(score, 10.0);","return Math.min(score, 10.0)*10;")
+
     # Bangun query untuk mendapatkan presence score dari topik utama
     def build_presence_score_query(keywords=None,search_keyword=None):
         must_conditions = [
@@ -296,13 +299,13 @@ def get_presence_score(
                 }
             },
             "aggs": {
-                # Agregasi untuk presence score rata-rata
+                # Agregasi untuk presence score rata-rata menggunakan script
                 "average_presence": {
                     "avg": {
-                        "field": "influence_score"
+                        "script": script_score_temp
                     }
                 },
-                # Agregasi untuk presence score seiring waktu
+                # Agregasi untuk presence score seiring waktu menggunakan script
                 "presence_over_time": {
                     "date_histogram": {
                         "field": "post_created_at",
@@ -312,7 +315,7 @@ def get_presence_score(
                     "aggs": {
                         "presence_score": {
                             "avg": {
-                                "field": "influence_score"
+                                "script": script_score_temp
                             }
                         }
                     }
