@@ -5,6 +5,7 @@ Type definitions for Elasticsearch data models
 from typing import Optional, List, Literal, Dict, Any, Union
 from dataclasses import dataclass
 from datetime import datetime
+from pydantic import BaseModel, Field
 
 @dataclass
 class SocialMediaMetrics:
@@ -65,3 +66,13 @@ class ElasticsearchConfig:
     use_ssl: bool = False
     verify_certs: bool = False
     ca_certs: Optional[str] = None
+
+class AIFeedbackData(BaseModel):
+    """Data model for AI feedback"""
+    query_user: str
+    response_ai: Dict[str, Any]
+    feedback_user: str
+    user_name: Optional[str] = None
+    project_name: Optional[str] = None
+    additional_info: Optional[Dict[str, Any]] = None
+    timestamp: datetime = Field(default_factory=datetime.utcnow)

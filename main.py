@@ -25,7 +25,9 @@ from utils.summary_stats import get_stats_summary
 from utils.trending_hashtags import get_trending_hashtags
 from utils.trending_links import get_trending_links
 from utils.moskal_ai import pipeline_ai # Added import for moskal_ai pipeline
-from fastapi import BackgroundTasks # Added for v2 endpoint
+from models.types import AIFeedbackData # Import the new model
+from elasticsearch import Elasticsearch, NotFoundError # Import Elasticsearch and NotFoundError
+from fastapi import BackgroundTasks, HTTPException # Added for v2 endpoint and error handling
 import sys
 import traceback
 
@@ -1000,4 +1002,62 @@ def moskal_ai_process(
         print(f"Error in /moskal-ai-pipeline: {e}")
         traceback.print_exc()
         # Consider returning a more structured error response, e.g., FastAPI's HTTPException
-        return {"error": "An internal server error occurred", "detail": str(e)}
+        raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
+
+@app.post("/api/v2/ai-feedback", tags=["Moskal AI"])
+def store_ai_feedback(feedback_data: AIFeedbackData):
+    """
+    Stores feedback from Moskal AI interactions into Elasticsearch.
+
+    This endpoint receives user queries, AI responses, user feedback, and other
+    contextual information. It then stores this data in an Elasticsearch index
+    named "ai_feedback". If the index does not exist, it will be created.
+    """
+    AI_FEEDBACK_INDEX = "ai_feedback"
+    es_client = None
+    try:
+        es_client = get_elasticsearch_client()
+
+        # Check if index exists, create if not
+        if not es_client.indices.exists(index=AI_FEEDBACK_INDEX):
+            try:
+                es_client.indices.create(
+                    index=AI_FEEDBACK_INDEX,
+                    body={
+                        "mappings": {
+                            "properties": {
+                                "timestamp": {"type": "date"},
+                                "query_user": {"type": "text", "analyzer": "standard"},
+                                "feedback_user": {"type": "text", "analyzer": "standard"},
+                                "response_ai": {"type": "object", "enabled": False}, # Storing as object, not indexed for search
+                                "user_name": {"type": "keyword"},
+                                "project_name": {"type": "keyword"},
+                                "additional_info": {"type": "object", "enabled": False}
+                            }
+                        }
+                    }
+                )
+                print(f"Index '{AI_FEEDBACK_INDEX}' created successfully.")
+            except Exception as e_create: # More specific exception handling for creation if needed
+                print(f"Error creating index '{AI_FEEDBACK_INDEX}': {e_create}")
+                raise HTTPException(status_code=500, detail=f"Failed to create Elasticsearch index: {str(e_create)}")
+
+        # Index the feedback data
+        # Pydantic's model_dump() is preferred over dict() for serialization
+        document_body = feedback_data.model_dump()
+        
+        # Ensure timestamp is in ISO format for Elasticsearch
+        if isinstance(document_body.get("timestamp"), datetime):
+            document_body["timestamp"] = document_body["timestamp"].isoformat()
+            
+        es_client.index(index=AI_FEEDBACK_INDEX, document=document_body)
+        
+        return {"message": "Feedback stored successfully"}
+
+    except ConnectionRefusedError:
+        print(f"Connection refused when trying to connect to Elasticsearch for AI feedback.")
+        raise HTTPException(status_code=503, detail="Could not connect to Elasticsearch service.")
+    except Exception as e:
+        print(f"Error storing AI feedback: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to store AI feedback: {str(e)}")
