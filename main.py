@@ -13,9 +13,8 @@ from utils.intent_emotions_region import get_intents_emotions_region_share
 from utils.keyword_trends import get_keyword_trends
 from utils.list_of_mentions import get_mentions
 from utils.topics_sentiment_analysis import get_topics_sentiment_analysis
-from utils.topics_overview import topic_overviews
-from utils.topicsv2.main_topic import main_topics as main_topics_v2 # New import for v2
-from utils.topicsv2.helper import get_elasticsearch_client # To get ES client for v2
+
+from utils.topics_cluster import get_topics_cluster
 from utils.kol_overview import search_kol
 from utils.most_followers import get_most_followers
 from utils.popular_emojis import get_popular_emojis
@@ -327,6 +326,13 @@ class KolOverviewRequest(CommonParams):
         ...,
         example="gibran raka", 
         description="Project name"
+    )
+
+class TopicsClusterRequest(CommonParams):
+    cluster_size: int = Field(
+        default=100,
+        example=100, 
+        description="Maximum number of clusters to return"
     )
 
 # Request model for Moskal AI Pipeline
@@ -770,62 +776,6 @@ def stats_summary_analysis(
     return get_stats_summary(**params.dict())
 
 ########### TOPICS MENU ##########
-@app.post("/api/v2/topics-overview-v2", tags=["Topics Menu"])
-def topics_overview_v2_analysis( # Made async to align with potential BackgroundTasks usage
-    background_tasks: BackgroundTasks, # FastAPI injects this - moved before params
-    params: TopicsOverviewV2Request = Body(
-        ...,
-        examples={
-            "normal": {
-                "summary": "Standard example for Topics Overview V2",
-                "description": "A standard example for the new topics overview v2 endpoint",
-                "value": {
-                    **example_json, # Assuming example_json is defined and relevant
-                    "owner_id": "1",
-                    "project_name": "new project topics",
-                    "limit": 1000
-                }
-            }
-        }
-    )
-):
-    """
-    New Topics Overview (V2) endpoint with background processing.
-    
-    This endpoint processes topics, handling new and existing projects,
-    with background processing for extensive tasks.
-    """
-    es_client = get_elasticsearch_client() # Get the ES client instance
-    
-    # Prepare arguments for main_topics_v2
-    # main_topics_v2 expects all its defined parameters.
-    # TopicsOverviewV2Request contains owner_id, project_name, limit, and inherits CommonParams.
-    
-    return main_topics_v2(
-        project_name=params.project_name,
-        es=es_client,
-        background_tasks=background_tasks,
-        owner_id=params.owner_id,
-        keywords=params.keywords,
-        search_keyword=params.search_keyword,
-        search_exact_phrases=params.search_exact_phrases,
-        case_sensitive=params.case_sensitive,
-        sentiment=params.sentiment,
-        start_date=params.start_date,
-        end_date=params.end_date,
-        date_filter=params.date_filter,
-        custom_start_date=params.custom_start_date,
-        custom_end_date=params.custom_end_date,
-        channels=params.channels,
-        importance=params.importance,
-        influence_score_min=params.influence_score_min,
-        influence_score_max=params.influence_score_max,
-        region=params.region,
-        language=params.language,
-        domain=params.domain,
-        limit=params.limit
-    )
-
 @app.post("/api/v2/intent-emotions-region", tags=["Topics Menu"])
 def intent_emotions_analysis(
     params: CommonParams = Body(
@@ -875,47 +825,6 @@ def topics_sentiment_analysis(
 
     return get_topics_sentiment_analysis(**params.dict())
 
-@app.post("/api/v2/topics-overview", tags=["Topics Menu"])
-def topics_overview_analysis(
-    params: TopicsOverviewRequest = Body(
-        ...,
-        examples={
-            "normal": {
-                "summary": "Standard example",
-                "description": "A standard example for topics overview",
-                "value": {
-                    **example_json,
-                    "owner_id": "5",
-                    "project_name": "gibran raka"
-                }
-            }
-        }
-    )
-):
-    """
-    Gambaran umum topik.
-    
-    Digunakan pada Menu:
-    - Dashboard:
-        Topics to Watch
-    - Topics:
-        Overview
-    - Comparison
-        Most viral topics
-        
-    Parameter tambahan:
-    - owner_id: ID pemilik project
-    - project_name: Nama project
-    """
-
-    params_dict = params.dict()
-
-    # Ubah isi 'channels' jika ada
-    if 'channels' in params_dict and isinstance(params_dict['channels'], list):
-        params_dict['channels'] = ['news' if ch == 'media' else ch for ch in params_dict['channels']]
-
-    return topic_overviews(**params_dict)
-
 @app.post("/api/v2/kol-overview", tags=["KOL Menu"])
 def kol_overview_analysis(
     params: KolOverviewRequest = Body(
@@ -957,6 +866,40 @@ def kol_overview_analysis(
         params_dict['channels'] = ['news' if ch == 'media' else ch for ch in params_dict['channels']]
 
     return search_kol(**params_dict)
+
+@app.post("/api/v2/topics-cluster", tags=["Topics Menu"])
+def topics_cluster_analysis(
+    params: TopicsClusterRequest = Body(
+        ...,
+        examples={
+            "normal": {
+                "summary": "Standard example",
+                "description": "A standard example for topics cluster analysis",
+                "value": {
+                    **example_json,
+                    "cluster_size": 100
+                }
+            }
+        }
+    )
+):
+    """
+    Analisis cluster topik.
+    
+    Digunakan pada Menu:
+    - Topics: Cluster Analysis
+    - Dashboard: Topics Cluster Overview
+        
+    Parameter tambahan:
+    - cluster_size: jumlah maksimum cluster yang akan dikembalikan
+    """
+    params_dict = params.dict()
+
+    # Ubah isi 'channels' jika ada
+    if 'channels' in params_dict and isinstance(params_dict['channels'], list):
+        params_dict['channels'] = ['news' if ch == 'media' else ch for ch in params_dict['channels']]
+
+    return get_topics_cluster(**params_dict)
 
 ########### MOSKAL AI ##########
 @app.post("/api/v2/moskal-ai-pipeline", tags=["Moskal AI"])

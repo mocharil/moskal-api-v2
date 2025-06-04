@@ -134,7 +134,7 @@ def get_keyword_trends(
             
             # Tentukan field yang akan digunakan berdasarkan case_sensitive
             caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-            issue_field = "issue.keyword" if case_sensitive else "issue"
+            issue_field = "cluster.keyword" if case_sensitive else "cluster"
             
             if search_exact_phrases:
                 # Gunakan match_phrase untuk exact matching
@@ -166,7 +166,7 @@ def get_keyword_trends(
             
             # Tentukan field yang akan digunakan berdasarkan case_sensitive
             caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-            issue_field = "issue.keyword" if case_sensitive else "issue"
+            issue_field = "cluster.keyword" if case_sensitive else "cluster"
             
             if search_exact_phrases:
                 # Gunakan match_phrase untuk exact matching
@@ -292,7 +292,7 @@ def get_keyword_trends(
     try:
 
         import json
-        print(json.dumps(query, indent=2))
+        #print(json.dumps(query, indent=2))
         response = es.search(
             index=",".join(indices),
             body=query

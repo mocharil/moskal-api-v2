@@ -171,6 +171,7 @@ def generate_mcp_call(user_query: str, extracted_keywords: list[str] = None) -> 
     return result
 
 def pipeline_ai(user_query, extracted_keywords):
+
     mcp_result = generate_mcp_call(user_query, extracted_keywords)
 
     # true = True # This line was not needed and has been removed.
@@ -306,12 +307,6 @@ def pipeline_ai(user_query, extracted_keywords):
     """)
 
         
-        
-    print('-------------------------- ANSWER -------------------')
-    print(answer)
-
-    print('--------------------------QUERY----------------')
-    print(query)
     return eval(re.findall(r'\{.*\}',answer, flags=re.I|re.S)[0])
 
 ##contoh penggunaan

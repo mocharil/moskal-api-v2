@@ -167,7 +167,7 @@ def get_stats_summary(
                 keyword_list = keywords if isinstance(keywords, list) else [keywords]
                 keyword_should_conditions = []
                 caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-                issue_field = "issue.keyword" if case_sensitive else "issue"
+                issue_field = "cluster.keyword" if case_sensitive else "cluster"
                 if search_exact_phrases:
                     for kw in keyword_list:
                         keyword_should_conditions.extend([
@@ -191,7 +191,7 @@ def get_stats_summary(
                 search_keyword_list = search_keyword if isinstance(search_keyword, list) else [search_keyword]
                 search_keyword_should_conditions = []
                 caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-                issue_field = "issue.keyword" if case_sensitive else "issue"
+                issue_field = "cluster.keyword" if case_sensitive else "cluster"
                 if search_exact_phrases:
                     for sk in search_keyword_list:
                         search_keyword_should_conditions.extend([

@@ -157,7 +157,7 @@ def get_social_media_matrix(
                 
                 # Tentukan field yang akan digunakan berdasarkan case_sensitive
                 caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-                issue_field = "issue.keyword" if case_sensitive else "issue"
+                issue_field = "cluster.keyword" if case_sensitive else "cluster"
                 
                 if search_exact_phrases:
                     # Gunakan match_phrase untuk exact matching
@@ -189,7 +189,7 @@ def get_social_media_matrix(
                 
                 # Tentukan field yang akan digunakan berdasarkan case_sensitive
                 caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-                issue_field = "issue.keyword" if case_sensitive else "issue"
+                issue_field = "cluster.keyword" if case_sensitive else "cluster"
                 
                 if search_exact_phrases:
                     # Gunakan match_phrase untuk exact matching
@@ -453,7 +453,7 @@ def get_social_media_matrix(
     current_metrics_query = build_metrics_query(current_base_query)
     
     import json
-    print(json.dumps(current_metrics_query, indent=2))
+    #print(json.dumps(current_metrics_query, indent=2))
 
     current_all_response = es.search(
         index=",".join(all_indices),
@@ -481,7 +481,7 @@ def get_social_media_matrix(
         # Bangun dan jalankan query untuk periode sebelumnya
         previous_base_query = build_base_query(previous_start_str, previous_end_str)
         previous_metrics_query = build_metrics_query(previous_base_query)
-        print(json.dumps(previous_base_query, indent=2))
+        #print(json.dumps(previous_base_query, indent=2))
 
         previous_all_response = es.search(
             index=",".join(all_indices),

@@ -92,6 +92,7 @@ def get_topics_sentiment_analysis(
         domain=domain,
         sort_type="viral_score",  # Sort berdasarkan viral_score
         sort_order="desc",
+        is_print = False,
     page=1,
     page_size=50
     )
@@ -128,20 +129,21 @@ def get_topics_sentiment_analysis(
     )
 
     # Menyusun prompt untuk Gemini
-    prompt = f"""You are a Social Media Analyst Expert. Your task is to analyze and summarize the content based on the list of social media posts provided below. The posts are divided into two categories based on sentiment:
+    prompt = f"""Kamu adalah seorang Ahli Analisis Media Sosial. Tugasmu adalah menganalisis dan merangkum isi konten berdasarkan daftar postingan media sosial yang disediakan di bawah ini. Postingan telah dibagi menjadi dua kategori berdasarkan sentimen:
 
-    POSITIVE POSTS
+    POSTINGAN POSITIF
     {post_positive['data']}
 
-    NEGATIVE POSTS
+    POSTINGAN NEGATIF
     {post_negative['data']}
 
-    OUTPUT (in JSON format):
+    OUTPUT (dalam format JSON):
     {{
-      "positive_topics": "<Provide a concise summary (2–3 sentences) that captures the key topics or themes discussed in the positive posts.>",
-      "negative_topics": "<Provide a concise summary (2–3 sentences) that captures the key topics or concerns raised in the negative posts.>"
+    "positive_topics": "<Berikan ringkasan singkat (2–3 kalimat) yang menggambarkan topik atau tema utama yang dibahas dalam postingan positif.>",
+    "negative_topics": "<Berikan ringkasan singkat (2–3 kalimat) yang menggambarkan topik atau kekhawatiran utama yang muncul dalam postingan negatif.>"
     }}
     """
+
 
     # Memanggil Gemini API
     prediction = call_gemini(prompt)

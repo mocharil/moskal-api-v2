@@ -43,7 +43,8 @@ def get_mentions(
     sort_order="desc",
     page=1,
     page_size=10,
-    source=None  # Parameter baru untuk memilih field yang akan diambil
+    source=None,  # Parameter baru untuk memilih field yang akan diambil
+    is_print = False
 ):
     # Generate cache key based on all parameters
     cache_key = redis_client.generate_cache_key(
@@ -142,6 +143,7 @@ def get_mentions(
         size=page_size
     )
     
+    
     # Tambahkan from untuk pagination
     query["from"] = (page - 1) * page_size
     
@@ -209,8 +211,9 @@ def get_mentions(
 
     # Jalankan query
     try:
-        import json
-        print(json.dumps(query, indent=2))
+        if is_print:
+            import json
+            print(json.dumps(query, indent=2))
         response = es.search(
             index=",".join(indices),
             body=query

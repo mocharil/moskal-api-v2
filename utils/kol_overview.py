@@ -282,7 +282,7 @@ def search_kol(
                 },
                 "unique_issues": {
                     "terms": {
-                        "field": "issue.keyword",
+                        "field": "cluster.keyword",
                         "size": 10
                     }
                 }
@@ -295,7 +295,7 @@ def search_kol(
 
     try:
         import json
-        print(json.dumps(base_query, indent=2))
+        # print(json.dumps(base_query, indent=2))
         
         # Execute aggregation query
         response = es_conn.search(
@@ -382,36 +382,9 @@ def search_kol(
         # Get all unique issues for topic mapping
         list_issue = [j for i in final_kol['issue'] for j in i]
 
-        print('check topic map')
         # Check issue mapping (same logic as before)
-        query_body = {
-            "_source": ["unified_issue", "list_issue"],
-            "query": {
-                "bool": {
-                    "must": [
-                        {"match": {"project_name.keyword": project_name}},
-                        {"terms": {"list_issue.keyword": list_issue}},
-                    ]
-                }
-            }
-        }
-
-        response = es.search(
-            index="topic_cluster",
-            body=query_body,
-            size=10000
-        )
-        
-        top_map = [i['_source'] for i in response['hits']['hits']]
+        MAP = False
         dict_issue = {}
-        if top_map:
-            print('get map')
-            df_map = pd.DataFrame(top_map)
-            df_map = df_map.explode('list_issue').drop_duplicates('list_issue')
-            
-            for _, i in df_map.iterrows():
-                dict_issue.update({i['list_issue']: i['unified_issue']})
-
         # Apply unified issue mapping
         final_kol['unified_issue'] = final_kol['issue'].transform(lambda s: list(set([dict_issue.get(i, i) for i in s]))[:5])
         final_kol['user_category'] = final_kol.apply(lambda s: 'News Account' if s['channel'] == 'news' else s['user_category'], axis=1)

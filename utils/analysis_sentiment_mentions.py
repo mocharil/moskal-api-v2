@@ -145,7 +145,7 @@ def get_category_analytics(
                 
                 # Tentukan field yang akan digunakan berdasarkan case_sensitive
                 caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-                issue_field = "issue.keyword" if case_sensitive else "issue"
+                issue_field = "cluster.keyword" if case_sensitive else "cluster"
                 
                 if search_exact_phrases:
                     # Gunakan match_phrase untuk exact matching
@@ -177,7 +177,7 @@ def get_category_analytics(
                 
                 # Tentukan field yang akan digunakan berdasarkan case_sensitive
                 caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-                issue_field = "issue.keyword" if case_sensitive else "issue"
+                issue_field = "cluster.keyword" if case_sensitive else "cluster"
                 
                 if search_exact_phrases:
                     # Gunakan match_phrase untuk exact matching
@@ -341,9 +341,11 @@ def get_category_analytics(
         available_indices = [f"{channel}_data" for channel in all_channels]
         
 
-
         # Query untuk kategori
         category_query = build_category_query()
+        import json
+        #print(json.dumps(category_query, indent=2))
+
         category_response = es.search(
             index=",".join(available_indices),
             body=category_query
@@ -357,8 +359,8 @@ def get_category_analytics(
         )
         
         import json
-        print(json.dumps(category_query, indent=2))
-        print(json.dumps(sentiment_category_query, indent=2))
+        #print(json.dumps(category_query, indent=2))
+        #print(json.dumps(sentiment_category_query, indent=2))
 
 
         # Proses data kategori

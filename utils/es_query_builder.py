@@ -112,7 +112,7 @@ def build_elasticsearch_query(
     size=0,
     date_field="post_created_at",
     caption_field="post_caption",
-    issue_field="issue",
+    issue_field="cluster",
     aggs=None
 ):
     """
@@ -153,7 +153,7 @@ def build_elasticsearch_query(
     caption_field : str, optional
         Field name for caption text
     issue_field : str, optional
-        Field name for issue text
+        Field name for cluster text
     aggs : dict, optional
         Custom aggregations to include in the query
         

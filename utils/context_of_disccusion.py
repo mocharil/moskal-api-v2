@@ -173,7 +173,7 @@ def get_context_of_discussion(
             
             # Tentukan field yang akan digunakan berdasarkan case_sensitive
             caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-            issue_field = "issue.keyword" if case_sensitive else "issue"
+            issue_field = "cluster.keyword" if case_sensitive else "cluster"
             
             if search_exact_phrases:
                 # Gunakan match_phrase untuk exact matching
@@ -205,7 +205,7 @@ def get_context_of_discussion(
             
             # Tentukan field yang akan digunakan berdasarkan case_sensitive
             caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-            issue_field = "issue.keyword" if case_sensitive else "issue"
+            issue_field = "cluster.keyword" if case_sensitive else "cluster"
             
             if search_exact_phrases:
                 # Gunakan match_phrase untuk exact matching
@@ -351,7 +351,7 @@ def get_context_of_discussion(
     
     try:
         import json
-        print(json.dumps(alt_query, indent=2))
+        #print(json.dumps(alt_query, indent=2))
         # Execute query
         response = es.search(
             index=",".join(indices),

@@ -156,7 +156,7 @@ def get_presence_score(
                 
                 # Tentukan field yang akan digunakan berdasarkan case_sensitive
                 caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-                issue_field = "issue.keyword" if case_sensitive else "issue"
+                issue_field = "cluster.keyword" if case_sensitive else "cluster"
                 
                 if search_exact_phrases:
                     # Gunakan match_phrase untuk exact matching
@@ -188,7 +188,7 @@ def get_presence_score(
                 
                 # Tentukan field yang akan digunakan berdasarkan case_sensitive
                 caption_field = "post_caption.keyword" if case_sensitive else "post_caption"
-                issue_field = "issue.keyword" if case_sensitive else "issue"
+                issue_field = "cluster.keyword" if case_sensitive else "cluster"
                 
                 if search_exact_phrases:
                     # Gunakan match_phrase untuk exact matching
@@ -364,7 +364,7 @@ def get_presence_score(
         main_query = build_presence_score_query(keywords,search_keyword)
 
         import json
-        print(json.dumps(main_query, indent=2))
+        #print(json.dumps(main_query, indent=2))
 
         main_response = es.search(
             index=",".join(available_indices),

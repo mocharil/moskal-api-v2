@@ -68,7 +68,7 @@ def get_intents_emotions_region_share(
     cached_result = redis_client.get(cache_key)
     if cached_result is not None:
         print('Returning cached result')
-        return cached_result
+        # return cached_result
 
     # Buat koneksi Elasticsearch
     es = get_elasticsearch_client(
@@ -181,10 +181,10 @@ def get_intents_emotions_region_share(
         # Tentukan field yang akan digunakan berdasarkan case_sensitive
         if case_sensitive:
             caption_field = "post_caption.keyword"  # Gunakan subfield keyword jika case sensitive
-            issue_field = "issue.keyword"  # Gunakan subfield keyword jika case sensitive
+            issue_field = "cluster.keyword"  # Gunakan subfield keyword jika case sensitive
         else:
-            caption_field = "post_caption.case_insensitive"  # Gunakan subfield case_insensitive untuk non-case sensitive
-            issue_field = "issue.case_insensitive"  # Gunakan subfield case_insensitive untuk non-case sensitive
+            caption_field = "post_caption"  # Gunakan subfield case_insensitive untuk non-case sensitive
+            issue_field = "cluster"  # Gunakan subfield case_insensitive untuk non-case sensitive
         
         if search_exact_phrases:
             # Gunakan match_phrase untuk exact matching
@@ -280,8 +280,7 @@ def get_intents_emotions_region_share(
     
     # Gabungkan semua kondisi ke dalam query utama
     query = {
-        "size": 1000,  # Retrieve documents to process regions manually
-        "_source": ["region", "intent", "emotions"],
+        "size": 0,  
         "query": {
             "bool": {
                 "must": must_conditions
@@ -338,9 +337,7 @@ def get_intents_emotions_region_share(
     query["query"]["bool"]["filter"].append(region_not_specified_filter)
     
     try:
-
-        import json
-        print(json.dumps(query, indent=2))
+        #print(json.dumps(query, indent=2))
         # Execute query
         response = es.search(
             index=",".join(indices),
@@ -350,6 +347,7 @@ def get_intents_emotions_region_share(
         # Extract data
         total_mentions = response["aggregations"]["total_mentions"]["value"]
         
+        print('----->',total_mentions)
         # Process intents data
         intent_buckets = []
         
@@ -375,20 +373,19 @@ def get_intents_emotions_region_share(
         intents_share = []
         for bucket in intent_buckets:
             if bucket["key"] not in ["Not Specified", "not specified", "unknown", ""]:
-                percentage = round((bucket["doc_count"] / total_mentions) * 100) if total_mentions > 0 else 0
                 intents_share.append({
                     "name": bucket["key"],
-                    "percentage": percentage
+                    "percentage": bucket["doc_count"]
                 })
         
         # Format emotions share data
         emotions_share = []
         for bucket in emotions_buckets:
             if bucket["key"] not in ["Not Specified", "not specified", "unknown", ""]:
-                percentage = round((bucket["doc_count"] / total_mentions) * 100) if total_mentions > 0 else 0
+                
                 emotions_share.append({
                     "name": bucket["key"],
-                    "percentage": percentage
+                    "percentage": bucket["doc_count"]
                 })
         
         # Process regions manually to handle comma separation
@@ -415,7 +412,7 @@ def get_intents_emotions_region_share(
                 region_value = hit["_source"]["region"]
                 
                 # Skip not specified values
-                if region_value in ["Not Specified", "not specified", "unknown", ""]:
+                if region_value in ["Not Specified", "not specified", "unknown", "","Indonesia"]:
                     continue
                     
                 # Check if region contains comma
@@ -423,7 +420,7 @@ def get_intents_emotions_region_share(
                     # Split by comma and count each region
                     for region in region_value.split(","):
                         region = region.strip()
-                        if region and region not in ["Not Specified", "not specified", "unknown"]:
+                        if region and region not in ["Not Specified", "not specified", "unknown","Indonesia"]:
                             region_counts[region] = region_counts.get(region, 0) + 1
                 else:
                     region_counts[region_value] = region_counts.get(region_value, 0) + 1
@@ -431,11 +428,10 @@ def get_intents_emotions_region_share(
         # Convert region counts to percentage and format
         regions_share = []
         for region, count in region_counts.items():
-            if region.lower() not in ["not specified", "not specified", "unknown", "unspecified"]:
-                percentage = round((count / total_mentions) * 100) if total_mentions > 0 else 0
+            if region.lower() not in ["not specified", "not specified", "unknown", "unspecified","indonesia"]:
                 regions_share.append({
                     "name": region,
-                    "percentage": percentage
+                    "percentage": count
                 })
         
         # Sort by percentage (descending)
