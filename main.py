@@ -1,9 +1,10 @@
 print('preparing..')
-from fastapi import FastAPI, Body
+from fastapi import FastAPI, Body, Query
 from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware  # Import CORS middleware
+from fastapi.responses import StreamingResponse
 from utils.gemini import call_gemini
 
 from utils.analysis_overview import get_social_media_matrix
@@ -23,12 +24,13 @@ from utils.share_of_voice import get_share_of_voice
 from utils.summary_stats import get_stats_summary
 from utils.trending_hashtags import get_trending_hashtags
 from utils.trending_links import get_trending_links
-from utils.moskal_ai import pipeline_ai # Added import for moskal_ai pipeline
+from utils.moskal_ai import pipeline_ai_streaming
 from models.types import AIFeedbackData # Import the new model
 from elasticsearch import Elasticsearch, NotFoundError # Import Elasticsearch and NotFoundError
 from fastapi import BackgroundTasks, HTTPException # Added for v2 endpoint and error handling
 import sys
 import traceback
+import json
 
 try:
     # Log versioning info
@@ -902,50 +904,51 @@ def topics_cluster_analysis(
     return get_topics_cluster(**params_dict)
 
 ########### MOSKAL AI ##########
-@app.post("/api/v2/moskal-ai-pipeline", tags=["Moskal AI"])
-def moskal_ai_process(
-    request_data: MoskalAIRequest = Body(
-        ...,
-        examples={
-            "normal": {
-                "summary": "Standard Moskal AI query",
-                "description": "A standard query with user text and optional keywords.",
-                "value": {
-                    "user_query": "tell me about prabowo's recent activities regarding food security",
-                    "extracted_keywords": ["prabowo", "food security"]
-                }
-            },
-            "no_keywords": {
-                "summary": "Query without pre-extracted keywords",
-                "description": "A query where keywords will be determined by the pipeline.",
-                "value": {
-                    "user_query": "what is the sentiment around the new Gibran policy?"
-                }
-            }
-        }
-    )
+@app.get("/api/v2/moskal-ai",tags=["Moskal AI"])
+async def stream_analysis(
+    query: str = Query(..., description="User query to analyze"),
+    keywords: Optional[str] = Query(None, description="Comma-separated keywords")
 ):
     """
-    Processes a user query through the Moskal AI pipeline.
+    Stream analysis endpoint - Server-Sent Events format
     
-    This endpoint takes a user's natural language query and an optional list of
-    pre-extracted keywords. It then uses the `pipeline_ai` function to:
-    1. Determine relevant utility functions to call based on the query.
-    2. Fetch data using Elasticsearch.
-    3. Call the identified utility functions.
-    4. Synthesize an answer using a generative AI model (Gemini).
+    Example: /stream-analysis?query=sentiment about product X&keywords=product,sentiment
     """
     try:
-        result = pipeline_ai(
-            user_query=request_data.user_query,
-            extracted_keywords=request_data.extracted_keywords
+        # Parse keywords
+        extracted_keywords = []
+        if keywords:
+            extracted_keywords = [k.strip() for k in keywords.split(",") if k.strip()]
+        
+        async def generate():
+            try:
+                async for response in pipeline_ai_streaming(query, extracted_keywords):
+                    yield f"data: {json.dumps(response, ensure_ascii=False)}\n\n"
+                
+            except Exception as e:
+                error_response = {
+                    "type": "stream",
+                    "step": "error",
+                    "message": f"Stream error: {str(e)}",
+                    "progress": 0
+                }
+                yield f"data: {json.dumps(error_response)}\n\n"
+        
+        return StreamingResponse(
+            generate(), 
+            media_type="text/plain",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive"
+            }
         )
-        return result
+        
     except Exception as e:
-        print(f"Error in /moskal-ai-pipeline: {e}")
-        traceback.print_exc()
-        # Consider returning a more structured error response, e.g., FastAPI's HTTPException
-        raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
+        return StreamingResponse(
+            iter([f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"]),
+            media_type="text/plain"
+        )
+
 
 @app.post("/api/v2/ai-feedback", tags=["Moskal AI"])
 def store_ai_feedback(feedback_data: AIFeedbackData):
@@ -959,6 +962,7 @@ def store_ai_feedback(feedback_data: AIFeedbackData):
     AI_FEEDBACK_INDEX = "ai_feedback"
     es_client = None
     try:
+        from utils.es_client import get_elasticsearch_client
         es_client = get_elasticsearch_client()
 
         # Check if index exists, create if not

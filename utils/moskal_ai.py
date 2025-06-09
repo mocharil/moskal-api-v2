@@ -1,319 +1,808 @@
 from utils.gemini import call_gemini
 import os
-from utils.es_client import get_elasticsearch_client
 import re
-import importlib
+import json
+from typing import Dict, List, Any, Optional, AsyncGenerator
+import asyncio
+from enum import Enum
 
-# Buat koneksi Elasticsearch
-es = get_elasticsearch_client()
+false = False
+true = True
+null = ''
+
+class StreamStepType(Enum):
+    """Enum untuk tipe step dalam streaming response"""
+    INIT = "init"
+    ANALYSIS = "analysis" 
+    STRATEGY = "strategy"
+    QUERY_GENERATION = "query_generation"
+    DATA_SEARCH = "data_search"
+    DATA_PROCESSING = "data_processing"
+    RESPONSE_GENERATION = "response_generation"
+    COMPLETED = "completed"
+    ERROR = "error"
+
+class StreamingResponse:
+    """Class untuk streaming response structure"""
+    def __init__(self, step: StreamStepType, message: str, data: Dict = None, progress: int = 0):
+        self.step = step.value
+        self.message = message
+        self.data = data or {}
+        self.progress = progress
+        self.timestamp = asyncio.get_event_loop().time()
+    
+    def to_dict(self) -> Dict:
+        return {
+            "step": self.step,
+            "message": self.message,
+            "data": self.data,
+            "progress": self.progress,
+            "timestamp": self.timestamp
+        }
+    
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), ensure_ascii=False)
+
+mcp_config = {
+  "mcpServers": {
+    "elasticsearch": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-elasticsearch"],
+      "env": {
+        "ELASTICSEARCH_URL": os.getenv("ELASTICSEARCH_URL", "http://localhost:9200"),
+        "ELASTICSEARCH_USERNAME": os.getenv("ELASTICSEARCH_USERNAME"), 
+        "ELASTICSEARCH_PASSWORD": os.getenv("ELASTICSEARCH_PASSWORD"),
+        "ELASTICSEARCH_INDEX_PATTERN": "reddit_data,youtube_data,linkedin_data,twitter_data,tiktok_data,instagram_data,facebook_data,news_data,threads_data"
+      }
+    }
+  },
+  "tools": {
+    "allowed": [
+      "elasticsearch_search",
+      "elasticsearch_aggregate", 
+      "elasticsearch_get"
+    ]
+  }
+}
+
+# MCP Elasticsearch Client (unchanged)
+class MCPElasticsearchClient:
+    """MCP Elasticsearch Client untuk berinteraksi dengan ES melalui MCP"""
+    def __init__(self, mcp_server_config: Dict = None):
+        self.mcp_config = mcp_server_config or {
+            "server": "elasticsearch",
+            "url": os.getenv("ELASTICSEARCH_URL", "http://localhost:9200"),
+            "username": os.getenv("ELASTICSEARCH_USERNAME"),
+            "password": os.getenv("ELASTICSEARCH_PASSWORD")
+        }
+    
+    async def search(self, index: str, body: Dict, size: int = 1000) -> Dict:
+        try:
+            query_body = body.copy()
+            if "size" not in query_body:
+                query_body["size"] = size
+            
+            mcp_query = {
+                "index": index,
+                "body": query_body
+            }
+            
+            result = await self._execute_mcp_search(mcp_query)
+            return result
+            
+        except Exception as e:
+            print(f"Error executing MCP ES search: {e}")
+            return {"error": str(e), "hits": {"hits": [], "total": {"value": 0}}}
+    
+    async def aggregate(self, index: str, body: Dict) -> Dict:
+        try:
+            query_body = body.copy()
+            query_body["size"] = 0
+            
+            mcp_query = {
+                "index": index,
+                "body": query_body
+            }
+            
+            result = await self._execute_mcp_search(mcp_query)
+            return result
+            
+        except Exception as e:
+            print(f"Error executing MCP ES aggregation: {e}")
+            return {"error": str(e), "aggregations": {}}
+    
+    async def _execute_mcp_search(self, query: Dict) -> Dict:
+        try:
+            # TODO: Implementasi actual MCP call
+            # Untuk sekarang, gunakan fallback ke ES langsung
+            from utils.es_client import get_elasticsearch_client
+            es = get_elasticsearch_client()
+            
+            result = es.search(
+                index=query["index"], 
+                body=query["body"]
+            )
+            return result
+            
+        except Exception as e:
+            print(f"MCP search execution error: {e}")
+            raise
+
+# Inisialisasi MCP ES Client
+mcp_es = MCPElasticsearchClient()
 
 with open('utils/api_query.md') as f:
     self_query = f.read()
 
-true = True
-false = False
-def execute_utility_function(endpoint_name: str, params: dict, project_name_arg: str = None, owner_id_arg: str = None):
-    """
-    Executes a local utility function based on the endpoint name.
-    Dynamically imports the module and calls the specified function.
-    """
-    # IMPORTANT: This map assumes a generic function name like 'handler_function' in most utility modules.
-    # You MUST update this map if your actual function names or module paths differ.
-    # 'presence_score_analysis' is an example of a specific function name derived from your api_docs.md.
-    # Module names are based on files in your 'utils/' directory.
-    endpoint_to_module_details = {
-        "mention-sentiment-breakdown": ("utils.analysis_sentiment_mentions", "get_category_analytics"),
-        "analysis-overview": ("utils.analysis_overview", "get_social_media_matrix"),
-        "list-of-mentions": ("utils.list_of_mentions", "get_mentions"),
-        "presence-score": ("utils.presence_score", "get_presence_score"),
-        "most-share-of-voice": ("utils.share_of_voice", "get_share_of_voice"),
-        "most-followers": ("utils.most_followers", "get_most_followers"),
-        "trending-hashtags": ("utils.trending_hashtags", "get_trending_hashtags"),
-        "trending-links": ("utils.trending_links", "get_trending_links"),
-        "popular-emojis": ("utils.popular_emojis", "get_popular_emojis"),
-        "stats": ("utils.summary_stats", "get_stats_summary"), # Assumes module is summary_stats.py for 'stats'
-        "intent-emotions-region": ("utils.intent_emotions_region", "get_intents_emotions_region_share"),
-        "topics-overview": ("utils.topics_overview", "topic_overviews"),
-        "kol-overview": ("utils.kol_overview", "search_kol"),
-        "keyword-trends": ("utils.keyword_trends", "get_keyword_trends"),
-        "context-of-discussion": ("utils.context_of_disccusion", "get_context_of_discussion") # Note: module name 'context_of_disccusion.py'
-    }
-
-    module_path, function_name = None, None
-
-    if endpoint_name in endpoint_to_module_details:
-        module_path, function_name = endpoint_to_module_details[endpoint_name]
-    else:
-        # Attempt to parse endpoint_name if it's not a direct key
-        # e.g., "utils.module_name.function_name"
-        parts = endpoint_name.split('.')
-        if len(parts) > 1: # Basic check for "a.b" structure
-            potential_function_name = parts[-1]
-            potential_module_path = ".".join(parts[:-1])
-
-            # Check if the parsed module_path exists in our map.
-            # If it does, we prioritize the function name from our map,
-            # especially if the incoming function name is a generic 'handler_function'.
-            for mapped_module_path, mapped_function_name in endpoint_to_module_details.values():
-                if mapped_module_path == potential_module_path:
-                    # Found the module in our map.
-                    if mapped_function_name == potential_function_name:
-                        # The incoming function name matches the specific one in our map.
-                        module_path = potential_module_path
-                        function_name = potential_function_name
-                        break  # Found a direct match for parsed module and function
-                    elif potential_function_name == "handler_function":
-                        # Incoming is generic 'handler_function', map has a specific one. Use the specific one.
-                        module_path = mapped_module_path # or potential_module_path
-                        function_name = mapped_function_name # Use the specific function from the map
-                        break # Resolved using specific function from map
-            # If after the loop, module_path and function_name are still None,
-            # it means the parsed endpoint_name (module or function) didn't match anything
-            # or couldn't be resolved appropriately against the map.
-            # The error check below (if not module_path or not function_name) will handle this.
-        # If not parsable into parts (len(parts) <= 1), or if the loop above didn't set module_path/function_name,
-        # they remain None and will be caught by the error check.
-
-    if not module_path or not function_name:
-        print(f"Error: Endpoint '{endpoint_name}' is not recognized. It's not a defined alias and couldn't be resolved to a known utility function. Please check the endpoint name or update 'endpoint_to_module_details'.")
-        return {"error": f"Unrecognized or unmapped endpoint: '{endpoint_name}'."}
-
-    # Prepare the parameters for the local function call.
-    # This replicates the logic from the original call_api where project_name and owner_id were added to the payload.
-    current_params = params.copy()
-    if project_name_arg:
-        current_params['project_name'] = project_name_arg
-    current_params['owner_id'] = owner_id_arg if owner_id_arg else "5" # Default owner_id to "5"
-
-    print(f"Attempting to call local function: {module_path}.{function_name}")
-    print(f"With parameters: {current_params}")
-
-    try:
-        module = importlib.import_module(module_path)
-        func_to_call = getattr(module, function_name)
-        
-        # Assuming the local utility function accepts a single dictionary of parameters
-        result = func_to_call(current_params)
-        print(f"Result from {module_path}.{function_name}: {result}")
-        return result
-
-    except ImportError:
-        print(f"Error: Could not import module '{module_path}'. Ensure the file exists and is correctly named (e.g., '{module_path.replace('.', '/')}.py').")
-        return {"error": f"Module {module_path} not found."}
-    except AttributeError:
-        print(f"Error: Function '{function_name}' not found in module '{module_path}'. Ensure the function is defined in the module and the name in 'endpoint_to_module_details' is correct.")
-        return {"error": f"Function '{function_name}' not found in {module_path}."}
-    except Exception as e:
-        print(f"Error executing function {function_name} from {module_path}: {e}")
-        import traceback
-        traceback.print_exc() # Print full traceback for debugging
-        return {"error": f"Exception occurred in {module_path}.{function_name}: {str(e)}"}
-
 def read_api_docs(file_path="utils/api_docs.md") -> str:
+    """Membaca dokumentasi query patterns untuk ES"""
     with open(file_path, "r", encoding="utf-8") as f:
         return f.read()
 
-def generate_mcp_prompt(user_query: str, extracted_keywords: list[str] = None) -> str:
+async def stream_generate_search_strategy(user_query: str, extracted_keywords: List[str] = None) -> AsyncGenerator[Dict, None]:
+    """Generate search strategy dengan streaming response"""
+    
+    yield {
+        "type": "stream",
+        "step": StreamStepType.ANALYSIS.value,
+        "message": "Menganalisis pertanyaan dan menentukan strategi pencarian...",
+        "progress": 10
+    }
+    
     api_docs = read_api_docs()
-
     extracted_keywords_str = (
-        f"Keywords yang diekstrak sebelumnya: {extracted_keywords}" if extracted_keywords else "Tidak ada keyword yang diekstrak."
+        f"Keywords yang diekstrak: {extracted_keywords}" if extracted_keywords else "Tidak ada keyword yang diekstrak."
     )
 
-    return f"""
-Kamu adalah asisten AI yang bertugas memilih endpoint API yang paling sesuai berdasarkan permintaan pengguna.
+    prompt = f"""
+Kamu adalah AI yang bertugas menentukan strategi pencarian data di Elasticsearch berdasarkan pertanyaan user.
 
-Berikut adalah dokumentasi endpoint API:
+Dokumentasi query patterns:
 {api_docs}
 
---- 
+Pertanyaan User: "{user_query}"
 
-### Petunjuk:
+Tentukan strategi pencarian yang dibutuhkan:
 
-1. Ambil _intent_ utama dari kalimat user berikut: "{user_query}"
-2. Gunakan kata kunci berikut sebagai filter post_caption: {extracted_keywords_str}
-3. Jika User tidak menuliskan tanggal, maka gunakan "last 30 days" di post_created_at
-4. Tambahkan Kata kunci jika diperlukan untuk menangkap hasil lebih luas
-5. Temukan maksimal 3 endpoint yang paling relevan dari daftar.
-6. Tambahkan param seperti: `keywords`, `channels`, `sentiment`, `date_filter` jika terlihat dari permintaan user.
-7. Tandai salah satu endpoint sebagai `"primary": true` jika dia paling penting untuk menjawab user query.
-8. Jika tidak ada endpoint yang cocok, balas: `{{ "error": "no matching endpoint" }}`
+1. **Jenis Query yang Dibutuhkan:**
+   - "search": untuk mencari dokumen spesifik
+   - "aggregation": untuk analisis statistik, trending, summary
+   - "both": kombinasi search + aggregation
 
----
+2. **Parameters:**
+   - keywords: list keyword untuk filter
+   - date_range: rentang tanggal (default: last 30 days jika tidak disebutkan)
+   - channels: platform medsos spesifik jika disebutkan
+   - sentiment: filter sentiment jika relevan
+   - sort_by: urutan hasil (recent, popular, relevance)
+   - analysis_type: jenis analisis (sentiment, trend, overview, comparison)
 
-### Format Jawaban dalam JSON tanpa penjelasan:
-
-[
-  {{
-    "endpoint": "topics-overview",
-    "primary": true,
-    "params": {{
-      "keywords": ["politik", "prabowo"],
-      "channels": ["twitter"],
-      "date_filter": "last 7 days"
+Format output JSON:
+{{
+    "query_type": "search|aggregation|both",
+    "analysis_type": "sentiment|trend|overview|comparison|mentions",
+    "parameters": {{
+        "keywords": [...],
+        "date_range": "last 30 days",
+        "channels": [...],
+        "sentiment": null,
+        "sort_by": "recent",
+        "limit": 100
     }}
-  }},
-  {{
-    "endpoint": "list-of-mentions",
-    "params": {{
-      "keywords": ["politik"],
-      "sort_type": "recent",
-      "date_filter": "last 7 days"
-    }}
-  }}
-]
+}}
 
+<HARD RULES>:
+Jika pertanyaan user tidak membutuhkan data media social dari Elasticsearch, maka:
+1. gunakan persona bahwa anda adalah Moskal AI yang akan membantu menjawab pertanyaan terkait project anda di media social, mulai dari ...
+2. gunakan nada informatif dan friendly
+3. jangan memberitahu terkait penggunaan database
+3. gunakan format ouput JSON seperti berikut:
+{{
+    "query_type": "general_question",
+    "answer": "<your answer>"
+}}
 """
 
-def generate_mcp_call(user_query: str, extracted_keywords: list[str] = None) -> str:
-    prompt = generate_mcp_prompt(user_query, extracted_keywords)
+    yield {
+        "type": "stream",
+        "step": StreamStepType.STRATEGY.value,
+        "message": "Menghasilkan strategi pencarian berdasarkan analisis...",
+        "progress": 20
+    }
+
     result = call_gemini(prompt)
-    return result
-
-def pipeline_ai(user_query, extracted_keywords):
-
-    mcp_result = generate_mcp_call(user_query, extracted_keywords)
-
-    # true = True # This line was not needed and has been removed.
     
-    list_api = []
-    list_api_str_match = re.findall(r'\[.*\]', mcp_result, flags=re.I | re.S)
-    if not list_api_str_match:
-        print(f"Warning: Could not parse function call list from MCP result: {mcp_result}")
-        # Depending on desired behavior, you might want to return an error or proceed with an empty list_api
+    try:
+        strategy_match = re.findall(r'\{.*\}', result, flags=re.I | re.S)
+        if strategy_match:
+            strategy = eval(strategy_match[0])
+            
+            yield {
+                "type": "stream",
+                "step": StreamStepType.STRATEGY.value,
+                "message": "Strategi pencarian berhasil dibuat",
+                "data": {"strategy": strategy},
+                "progress": 30
+            }
+            
+            # Return hasil sebagai yield dengan type result
+            yield {
+                "type": "result",
+                "data": strategy
+            }
+        else:
+            # Default strategy
+            default_strategy = {
+                "query_type": "search",
+                "analysis_type": "mentions",
+                "parameters": {
+                    "keywords": extracted_keywords or [],
+                    "date_range": "last 30 days",
+                    "channels": [],
+                    "sentiment": None,
+                    "sort_by": "recent",
+                    "limit": 100
+                }
+            }
+            
+            yield {
+                "type": "stream",
+                "step": StreamStepType.STRATEGY.value,
+                "message": "Menggunakan strategi default",
+                "data": {"strategy": default_strategy},
+                "progress": 30
+            }
+            
+            yield {
+                "type": "result",
+                "data": default_strategy
+            }
+            
+    except Exception as e:
+        yield {
+            "type": "stream",
+            "step": StreamStepType.ERROR.value,
+            "message": f"Error parsing search strategy: {e}",
+            "progress": 30
+        }
+        
+        yield {
+            "type": "result",
+            "data": {
+                "query_type": "search",
+                "analysis_type": "mentions", 
+                "parameters": {
+                    "keywords": extracted_keywords or [],
+                    "date_range": "last 30 days",
+                    "channels": [],
+                    "sentiment": None,
+                    "sort_by": "recent",
+                    "limit": 100
+                }
+            }
+        }
+
+async def stream_generate_elasticsearch_query(strategy: Dict, user_query: str,extracted_keywords: List[str] = [] ) -> AsyncGenerator[Dict, None]:
+    """Generate Elasticsearch query dengan streaming response"""
+    
+    yield {
+        "type": "stream",
+        "step": StreamStepType.QUERY_GENERATION.value,
+        "message": "Thinking...",
+        "progress": 40
+    }
+    
+    query_type = strategy.get("query_type", "search")
+    params = strategy.get("parameters", {})
+    if params:
+        params["keywords"].extend(extracted_keywords)
     else:
-        try:
-            list_api = eval(list_api_str_match[0])
-            if not isinstance(list_api, list): # Add type check
-                print(f"Warning: Parsed API list is not a list: {list_api}. MCP Result: {mcp_result}")
-                list_api = [] 
-        except Exception as e:
-            print(f"Error evaluating API list string: '{list_api_str_match[0]}'. Error: {e}. MCP Result: {mcp_result}")
-            # Depending on desired behavior, you might want to return an error or proceed with an empty list_api
+        params = {
+            "keywords": extracted_keywords,
+            "date_range": "last 30 days",
+            "channels": [],
+            "sentiment": ["positive","negative","neutral"],
+            "sort_by": "recent",
+            "limit": 100
+        }
+
+    limit = params.get("limit", 100)
     
-    all_data = []
+    prompt = f"""
+Buat query Elasticsearch berdasarkan strategy berikut:
+
+Query Type: {query_type}
+Analysis Type: {strategy.get("analysis_type", "mentions")}
+Parameters: {params}
+User Query: {user_query}
+
+Referensi struktur query: {self_query}
+
+Aturan:
+1. Gunakan keywords dari parameters untuk filter post_caption
+2. Gunakan date_range untuk filter post_created_at
+3. Jika query_type="aggregation", buat aggregation query untuk analisis
+4. Jika query_type="both", gabungkan search + aggregation
+5. Jika channels disebutkan, filter berdasarkan platform
+6. WAJIB: Sertakan "size": {limit} di dalam query body
+7. Untuk aggregation, tetap sertakan "size": 0
+
+Output harus berupa valid Elasticsearch query JSON dengan field "size" di dalam body.
+"""
+
+    query_response = call_gemini(prompt)
     
-    prompt = f"""Kamu adalah AI Assistant, tugasmu membuat query untuk mencari data di Elasticsearch berdasarkan pertanyaan yang diajukan oleh user.
-
-    Berikut adalah panduan untuk membuat query Elasticsearch:
-
-    1.  **Filter Tanggal (post_created_at)**:
-        *   Jika pengguna TIDAK menyebutkan rentang tanggal spesifik dalam "Pertanyaan User", maka secara OTOMATIS gunakan filter untuk 30 hari terakhir dari sekarang (misalnya, dalam format Elasticsearch: "now-30d/d" to "now/d").
-        *   Jika pengguna MENYEBUTKAN rentang tanggal, gunakan rentang tanggal yang disebutkan tersebut. Pastikan formatnya sesuai untuk Elasticsearch.
-
-    2.  **Filter Konten (post_caption)**:
-        *   [WAJIB] Selalu gunakan `extracted_keywords` (yaitu: {extracted_keywords}) sebagai dasar untuk memfilter field `post_caption`. Buat query `match` atau `terms` atau `match_phrase` untuk ini, tergantung mana yang paling sesuai.
-        *   Analisa "Pertanyaan User": "{user_query}". Jika terdapat keyword tambahan yang relevan dan dapat memperluas pencarian (misalnya user menyebut "cari juga tentang X"), tambahkan keyword tersebut ke dalam filter `post_caption`.
-        *   Gabungkan semua keyword ini (baik dari `extracted_keywords` maupun keyword tambahan dari "Pertanyaan User") dalam query boolean clause (misalnya, `should` jika ingin OR, atau `must` jika ingin AND, tergantung kebutuhan).
-
-    Gunakan informasi dari `{self_query}` sebagai referensi struktur query dan field yang tersedia saat membangun query Elasticsearch.
-
-    Pertanyaan User: {user_query}
-
-    Output yang diharapkan dalam format Query Elasticsearch JSON yang valid dan lengkap, tanpa penjelasan tambahan di luar JSON. Pastikan JSON tersebut adalah objek tunggal yang dimulai dengan `{{` dan diakhiri dengan `}}`.
-    """
-
-    query = call_gemini(prompt)
-
-    #remove .keyword
-    for i in ['region']:
-        query = query.replace(i+'.keyword',i )
 
 
-    query_es = eval(re.findall(r'\{.*\}',query, flags=re.I|re.S)[0])
+    # Clean up .keyword references
+    for field in ['region', 'channel', 'platform']:
+        query_response = query_response.replace(f'{field}.keyword', field)
+
+    try:
+        query_match = re.findall(r'\{.*\}', query_response, flags=re.I | re.S)
+        if query_match:
+            query_body = eval(query_match[0])
+            
+            # Pastikan size ada di body
+            if "size" not in query_body:
+                if query_type == "aggregation":
+                    query_body["size"] = 0
+
+
+
+                else:
+                    query_body["size"] = limit
+            
+            yield {
+                "type": "stream",
+                "step": StreamStepType.QUERY_GENERATION.value,
+                "message": "Query berhasil dibuat",
+                "data": {"elasticsearch_query": query_body},
+                "progress": 50
+            }
+            
+            yield {
+                "type": "result",
+                "data": query_body
+            }
+        else:
+            default_query = {
+                "size": limit,
+                "query": {"match_all": {}}
+            }
+            
+            yield {
+                "type": "stream",
+                "step": StreamStepType.QUERY_GENERATION.value,
+                "message": "Menggunakan query default",
+                "data": {"elasticsearch_query": default_query},
+                "progress": 50
+            }
+            
+            yield {
+                "type": "result",
+                "data": default_query
+            }
+            
+    except Exception as e:
+        yield {
+            "type": "stream",
+            "step": StreamStepType.ERROR.value,
+            "message": f"Error parsing: {e}",
+            "progress": 50
+        }
+        
+        yield {
+            "type": "result",
+            "data": {
+                "size": limit,
+                "query": {"match_all": {}}
+            }
+        }
+
+async def stream_search_elasticsearch_data(strategy: Dict, query_es: Dict) -> AsyncGenerator[Dict, None]:
+    """Search Elasticsearch dengan streaming response"""
+    
+    yield {
+        "type": "stream",
+        "step": StreamStepType.DATA_SEARCH.value,
+        "message": "Mencari data...",
+        "progress": 60
+    }
     
     index = 'reddit_data,youtube_data,linkedin_data,twitter_data,tiktok_data,instagram_data,facebook_data,news_data,threads_data'
-
+    query_type = strategy.get("query_type", "search")
     
-    result = es.search(index = index,
-              body = query_es)
+    print(json.dumps(query_es, indent=4))
 
 
-    all_data.append(result)    
-    
-    
-    for function_call_info in list_api:
-        print(f"Processing function call info: {function_call_info}")
-        if not isinstance(function_call_info, dict) or 'endpoint' not in function_call_info or 'params' not in function_call_info:
-            print(f"Warning: Skipping invalid function call info (must be a dict with 'endpoint' and 'params'): {function_call_info}")
-            continue
+    try:
+        if query_type == "aggregation":
+            result = await mcp_es.aggregate(index=index, body=query_es)
+        else:
+            result = await mcp_es.search(index=index, body=query_es)
         
-        # 'koperasi' is passed as project_name_arg. 
-        # owner_id_arg is not specified, so it will default to "5" inside execute_utility_function.
-        data = execute_utility_function(
-            endpoint_name=function_call_info['endpoint'],
-            params=function_call_info['params'],
-            project_name_arg='koperasi' 
-        )
+        total_hits = result.get("hits", {}).get("total", {}).get("value", 0) if "hits" in result else 0
+        
+        yield {
+            "type": "stream",
+            "step": StreamStepType.DATA_SEARCH.value,
+            "message": f"Data berhasil ditemukan: {total_hits} dokumen",
+            "data": {"total_documents": total_hits},
+            "progress": 70
+        }
+        
+        yield {
+            "type": "result",
+            "data": result
+        }
+        
+    except Exception as e:
+        yield {
+            "type": "stream",
+            "step": StreamStepType.ERROR.value,
+            "message": f"Error searching: {e}",
+            "progress": 70
+        }
+        
+        yield {
+            "type": "result",
+            "data": {"error": str(e), "hits": {"hits": [], "total": {"value": 0}}}
+        }
 
-        all_data.append({"endpoint": function_call_info['endpoint'], 'data': data})
+def process_elasticsearch_results(es_result: Dict, strategy: Dict) -> Dict:
+    """Process hasil ES dan extract informasi yang relevan (unchanged)"""
+    analysis_type = strategy.get("analysis_type", "mentions")
+    
+    if "error" in es_result:
+        return {"error": es_result["error"], "processed_data": []}
+    
+    processed_data = {
+        "total_hits": 0,
+        "documents": [],
+        "aggregations": {},
+        "analysis_type": analysis_type
+    }
+    
+    # Extract hits
+    if "hits" in es_result and "hits" in es_result["hits"]:
+        processed_data["total_hits"] = es_result["hits"]["total"]["value"]
+        
+        for hit in es_result["hits"]["hits"]:
+            source = hit.get("_source", {})
+            doc = {
+                "id": hit.get("_id"),
+                "platform": source.get("platform", "unknown"),
+                "caption": source.get("post_caption", ""),
+                "created_at": source.get("post_created_at"),
+                "author": source.get("author_name", ""),
+                "link": source.get("link_post", ""),
+                "sentiment": source.get("sentiment"),
+                "engagement": {
+                    "likes": source.get("likes_count", 0),
+                    "comments": source.get("comments_count", 0),
+                    "shares": source.get("shares_count", 0)
+                }
+            }
+            processed_data["documents"].append(doc)
+    
+    # Extract aggregations
+    if "aggregations" in es_result:
+        processed_data["aggregations"] = es_result["aggregations"]
+    
+    return processed_data
 
-    #final answered
+async def stream_generate_final_response(processed_data: Dict, strategy: Dict, user_query: str) -> AsyncGenerator[Dict, None]:
+    """Generate final response dengan streaming"""
+    
+    yield {
+        "type": "stream",
+        "step": StreamStepType.RESPONSE_GENERATION.value,
+        "message": "Menganalisis data dan membuat response...",
+        "progress": 80
+    }
+    
     answer = call_gemini(f"""
-    Kamu adalah Moskal AI, asisten AI yang bertugas untuk menjawab pertanyaan user berdasarkan data yang telah disediakan.
+Kamu adalah Moskal AI, asisten AI yang bertugas menjawab pertanyaan user berdasarkan data media sosial dari Elasticsearch.
 
-    🎯 TUJUAN:
-    - Jawaban harus ringkas, jelas, dan informatif.
-    - Format jawaban harus berupa JSON agar bisa dirender di UI (bukan HTML mentah).
+🎯 TUJUAN:
+- Jawaban berdasarkan data media sosial yang tersedia
+- Format JSON untuk rendering di UI
+- Analisis yang insight dan actionable
 
-    📌 RULES FORMAT OUTPUT:
-    - Format JSON dengan struktur: 
-    {{
-        "response_type": "mixed",
-        "components": [
+📌 RULES SAMPLE FORMAT OUTPUT:
+{{
+    "response_type": "mixed",
+    "data_source": "elasticsearch_social_media",
+    "total_documents_analyzed": "<jumlahkan seluruh data yang ada>",
+    "components": [
         {{
             "type": "text",
-            "content": "<penjelasan singkat jawaban>"
+            "content": "<insight utama dari analisis>"
         }},
-        {{
+        {{ #if needed
             "type": "table",
-            "title": "<judul tabel jika ada>",
-            "headers": [...],
+            "title": "Top Mentions",
+            "headers": ["Column Name 1", "Column Name 2", "Column Name 3"],
             "rows": [...]
         }},
-        {{
+        {{ #if needed
             "type": "chart",
-            "chart_type": "bar" | "line" | "pie",
+            "chart_type": "bar|line|pie",
             "title": "<judul chart>",
-            "x_axis": "...",
-            "y_axis": "...",
-            "data": [{{...}}, ...]
+            "data": [...]
         }}
-        ],
-        "footnotes": [
+    ],
+    "insights": [ #if needed
+        "Insight 1: ...",
+        "Insight 2: ..."
+    ],
+    "footnotes": [ #if needed
         {{
-            "content": "Referensi: https://example.com/post/abc123"
+            "content": "URL dari field link_post jika ada"
         }}
-        ]
-    }}
+    ]
+}}
 
-    📌 ATURAN TAMBAHAN:
-    - Jangan menyebut nama Endpoint manapun dalam jawaban.
-    - Jika terdapat entri `link_post` dalam data, jadikan itu sebagai footnote referensi.
-    - Jika tidak ada `link_post`, `footnotes` boleh dikosongkan.
-    - Hapus entri yang mengandung kata 'unspecified' dari data.
-    - Semua teks penjelasan boleh dalam bahasa Indonesia.
-    - Jika hanya berupa teks (tanpa data tabel/grafik), gunakan type: "text" saja.
+📦 INPUT:
+Pertanyaan User: {user_query}
+Strategy: {strategy}
+Data Analysis Type: {processed_data['analysis_type']}
+Processed Data: {processed_data}
 
-    📦 INPUT:
-    Pertanyaan User:
-    {user_query}
-
-    Data yang tersedia:
-    {all_data}
-
-    🎯 OUTPUT:
-    Berikan output dalam format JSON sesuai spesifikasi di atas.
-    """)
-
+🎯 OUTPUT:
+JSON response dengan analisis mendalam data media sosial.
+""")
+    
+    try:
+        answer_match = re.findall(r'\{.*\}', answer, flags=re.I | re.S)
+        if answer_match:
+            result = eval(answer_match[0])
+            
+            # Ensure required fields
+            if "data_source" not in result:
+                result["data_source"] = "elasticsearch_social_media"
+            if "total_documents_analyzed" not in result:
+                result["total_documents_analyzed"] = processed_data['total_hits']
+            
+            yield {
+                "type": "stream",
+                "step": StreamStepType.RESPONSE_GENERATION.value,
+                "message": "Response berhasil dibuat",
+                "data": {"response_preview": result.get("components", [])[:1]},
+                "progress": 90
+            }
+            
+            yield {
+                "type": "result",
+                "data": result
+            }
+        else:
+            default_response = {
+                "response_type": "text",
+                "data_source": "elasticsearch_social_media",
+                "total_documents_analyzed": processed_data['total_hits'],
+                "components": [{"type": "text", "content": "Data media sosial ditemukan, namun gagal memproses analisis."}],
+                "footnotes": []
+            }
+            
+            yield {
+                "type": "stream",
+                "step": StreamStepType.RESPONSE_GENERATION.value,
+                "message": "Menggunakan response default",
+                "progress": 90
+            }
+            
+            yield {
+                "type": "result",
+                "data": default_response
+            }
+            
+    except Exception as e:
+        yield {
+            "type": "stream",
+            "step": StreamStepType.ERROR.value,
+            "message": f"Error parsing final answer: {e}",
+            "progress": 90
+        }
         
-    return eval(re.findall(r'\{.*\}',answer, flags=re.I|re.S)[0])
+        yield {
+            "type": "result",
+            "data": {
+                "response_type": "text",
+                "data_source": "elasticsearch_social_media", 
+                "total_documents_analyzed": processed_data['total_hits'],
+                "components": [{"type": "text", "content": f"Error dalam analisis: {str(e)}"}],
+                "footnotes": []
+            }
+        }
 
-##contoh penggunaan
+async def pipeline_ai_streaming(user_query: str, extracted_keywords: List[str] = None) -> AsyncGenerator[Dict, None]:
+    """
+    Main streaming pipeline untuk QnA dengan step-by-step progress
+    """
+    
+    # Step 1: Initialize
+    yield {
+        "type": "stream",
+        "step": StreamStepType.INIT.value,
+        "message": f"Memulai analisis untuk: {user_query}",
+        "data": {"query": user_query, "keywords": extracted_keywords},
+        "progress": 0
+    }
+    
+    try:
+        # Step 2-3: Generate search strategy
+        strategy = None
+        async for stream_response in stream_generate_search_strategy(user_query, extracted_keywords):
+            if stream_response["type"] == "stream":
+                yield stream_response
+            elif stream_response["type"] == "result":
+                strategy = stream_response["data"]
+        
+        if not strategy:
+            yield {
+                "type": "stream",
+                "step": StreamStepType.ERROR.value,
+                "message": "Gagal membuat strategi pencarian",
+                "progress": 30
+            }
+            return
+        
+        # Check for general question
+        if strategy.get('query_type') == 'general_question':
+            yield {
+                "type": "final",
+                "step": StreamStepType.COMPLETED.value,
+                "message": "Pertanyaan umum dijawab",
+                "data": {
+                    "final_response": {
+                        "response_type": "text",
+                        "data_source": "general_question", 
+                        "total_documents_analyzed": 0,
+                        "components": [{"type": "text", "content": strategy["answer"]}],
+                        "footnotes": []
+                    }
+                },
+                "progress": 100
+            }
+            return
+        
+        # Step 4: Generate Elasticsearch query
+        query_es = None
+        async for stream_response in stream_generate_elasticsearch_query(strategy, user_query, extracted_keywords):
+            if stream_response["type"] == "stream":
+                yield stream_response
+            elif stream_response["type"] == "result":
+                query_es = stream_response["data"]
+        
+        if not query_es:
+            yield {
+                "type": "stream",
+                "step": StreamStepType.ERROR.value,
+                "message": "Gagal mengambil data",
+                "progress": 50
+            }
+            return
+        
+        # Step 5: Search Elasticsearch
+        es_result = None
+        async for stream_response in stream_search_elasticsearch_data(strategy, query_es):
+            if stream_response["type"] == "stream":
+                yield stream_response
+            elif stream_response["type"] == "result":
+                es_result = stream_response["data"]
+        
+        if not es_result:
+            yield {
+                "type": "stream",
+                "step": StreamStepType.ERROR.value,
+                "message": "Gagal mendapatkan data",
+                "progress": 70
+            }
+            return
+        
+        # Step 6: Process data
+        yield {
+            "type": "stream",
+            "step": StreamStepType.DATA_PROCESSING.value,
+            "message": "Memproses dan menganalisis data...",
+            "progress": 75
+        }
+        
+        processed_data = process_elasticsearch_results(es_result, strategy)
+        
+        yield {
+            "type": "stream",
+            "step": StreamStepType.DATA_PROCESSING.value,
+            "message": f"Data berhasil diproses: {processed_data['total_hits']} dokumen",
+            "data": {"processed_summary": {
+                "total_hits": processed_data['total_hits'],
+                "analysis_type": processed_data['analysis_type']
+            }},
+            "progress": 80
+        }
+        
+        # Step 7: Generate final response
+        final_response = None
+        async for stream_response in stream_generate_final_response(processed_data, strategy, user_query):
+            if stream_response["type"] == "stream":
+                yield stream_response
+            elif stream_response["type"] == "result":
+                final_response = stream_response["data"]
+        
+        if not final_response:
+            yield {
+                "type": "stream",
+                "step": StreamStepType.ERROR.value,
+                "message": "Gagal membuat response akhir",
+                "progress": 90
+            }
+            return
+        
+        # Step 8: Completed
+        yield {
+            "type": "final",
+            "step": StreamStepType.COMPLETED.value,
+            "message": "Analisis selesai",
+            "data": {"final_response": final_response},
+            "progress": 100
+        }
+        
+    except Exception as e:
+        yield {
+            "type": "stream",
+            "step": StreamStepType.ERROR.value,
+            "message": f"Error dalam pipeline: {str(e)}",
+            "progress": 0
+        }
 
-"""
-user_query = "siapa budi arie? dan hubungannya dengan koperasi apa?"
-extracted_keywords = ["politik", "gibran"]  # hasil NER atau keyword extraction, opsional
+# Usage Example untuk FastAPI atau framework lain
+async def stream_response_example():
+    """
+    Contoh penggunaan streaming response
+    """
+    user_query = "Apa sentimen publik tentang produk X?"
+    keywords = ["produk X", "sentimen"]
+    
+    async for response in pipeline_ai_streaming(user_query, keywords):
+        # Kirim response ke client (WebSocket, SSE, dll)
+        print(f"Type: {response['type']}")
+        print(f"Step: {response['step']}")
+        print(f"Message: {response['message']}")
+        print(f"Progress: {response['progress']}%")
+        if 'data' in response:
+            print(f"Data: {response['data']}")
+        print("---")
+        
+        # Untuk SSE (Server-Sent Events):
+        # yield f"data: {json.dumps(response)}\n\n"
+        
+        # Untuk WebSocket:
+        # await websocket.send_text(json.dumps(response))
 
-pipeline_ai(user_query, extracted_keywords)
-"""
+# Backward compatibility wrappers
+async def pipeline_ai_async(user_query: str, extracted_keywords: List[str] = None) -> Dict:
+    """Async wrapper yang mengembalikan hasil final saja"""
+    final_result = None
+    async for response in pipeline_ai_streaming(user_query, extracted_keywords):
+        if response["type"] == "final" and response["step"] == StreamStepType.COMPLETED.value:
+            final_result = response["data"].get("final_response")
+            break
+    return final_result or {"error": "No final result received"}
+
+def pipeline_ai_sync(user_query: str, extracted_keywords: List[str] = None) -> Dict:
+    """Synchronous wrapper yang mengembalikan hasil final saja"""
+    import asyncio
+    
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, pipeline_ai_async(user_query, extracted_keywords))
+                return future.result()
+        else:
+            return loop.run_until_complete(pipeline_ai_async(user_query, extracted_keywords))
+    except RuntimeError:
+        return asyncio.run(pipeline_ai_async(user_query, extracted_keywords))
