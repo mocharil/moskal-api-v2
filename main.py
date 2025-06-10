@@ -905,7 +905,7 @@ def topics_cluster_analysis(
 
 ########### MOSKAL AI ##########
 @app.get("/api/v2/moskal-ai",tags=["Moskal AI"])
-async def stream_analysis(
+def stream_analysis(
     query: str = Query(..., description="User query to analyze"),
     keywords: Optional[str] = Query(None, description="Comma-separated keywords")
 ):
