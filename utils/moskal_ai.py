@@ -295,7 +295,17 @@ async def stream_generate_elasticsearch_query(strategy: Dict, user_query: str,ex
     query_type = strategy.get("query_type", "search")
     params = strategy.get("parameters", {})
     if params:
-        params["keywords"].extend(extracted_keywords)
+        print('------------')
+        print()
+        print('------------')
+
+        keywords = params["keywords"]
+        if keywords and type(keywords) == str:
+            params["keywords"] = keywords.split(',')
+        elif not keywords:
+            params["keywords"] = extracted_keywords
+        else:
+            params["keywords"].extend(extracted_keywords)
     else:
         params = {
             "keywords": extracted_keywords,
